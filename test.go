@@ -12,7 +12,7 @@ func main() {
 	go receiver.Receive(ch, 1)
 
 	for i := range ch {
-		fmt.Println(i)
+		fmt.Println(i.Data())
 	}
 
 	// d := []byte{1, 2, 3, 4, 5, 6}
