@@ -26,13 +26,12 @@ package main
 import (
 	"fmt"
 
-	"github.com/Hundemeier/go-sacn/packets"
-	"github.com/Hundemeier/go-sacn/receiver"
+	"github.com/Hundemeier/go-sacn/sacn"
 )
 
 func main() {
-	ch := make(chan packets.DataPacket)
-	go receiver.Receive(ch, 1)
+	ch := make(chan sacn.DataPacket)
+	go sacn.Receive(ch, 1)
 
 	for i := range ch {
 		fmt.Println(i.Data())

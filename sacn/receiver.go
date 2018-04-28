@@ -1,13 +1,12 @@
-package receiver
+package sacn
 
 import (
 	"net"
 	"time"
-
-	"github.com/Hundemeier/go-sacn/packets"
 )
 
-func Receive(c chan<- packets.DataPacket, universe uint16) error {
+//Receive uses a channel to return the sACN packets that are received on ":5568"
+func Receive(c chan<- DataPacket, universe uint16) error {
 	ServerAddr, err := net.ResolveUDPAddr("udp", ":5568")
 	if err != nil {
 		return err
@@ -28,7 +27,7 @@ func Receive(c chan<- packets.DataPacket, universe uint16) error {
 		if addr == nil {                          //Check if we had a timeout
 			close(c) //Close the channel in case of a timeout
 		}
-		p, err := packets.NewDataPacketRaw(buf[0:n])
+		p, err := NewDataPacketRaw(buf[0:n])
 		if err != nil {
 			break
 		}
