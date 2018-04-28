@@ -35,3 +35,11 @@ func TestGetAsUint32(t *testing.T) {
 		t.Errorf("Wrong output! Was: %v; Should've been: %v", out, shouldBe)
 	}
 }
+
+func TestCalcMulticastAddr(t *testing.T) {
+	out := calcMulticastAddr(257)
+	shouldBe := "239.255.1.1"
+	if out != shouldBe {
+		t.Errorf("Wrong output! Was: %v; Should've been: %v", out, shouldBe)
+	}
+}

@@ -1,6 +1,9 @@
 package sacn
 
-import "math"
+import (
+	"fmt"
+	"math"
+)
 
 //CalculateFal : Calculates the two bytes of a FlagsAndLength field of a sACN packet
 func calculateFal(length uint16) [2]byte {
@@ -23,4 +26,9 @@ func getAsUint32(arr []byte) uint32 {
 		value += uint32(float64(arr[i]) * math.Pow(256, float64(len(arr)-i-1)))
 	}
 	return value
+}
+
+func calcMulticastAddr(universe uint16) string {
+	byt := getAsBytes16(universe)
+	return fmt.Sprintf("239.255.%v.%v", byt[0], byt[1])
 }
