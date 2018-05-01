@@ -18,9 +18,14 @@ It returns a data channel and an error channel.
 The data channel returns every packet that is received on the given universe. If a timeout occurred 
 (2,5s no message) or a packet with the StreamTermination-bit was set, the channel will close.
 
-Please note that the data is not sorted by seqeunce number nor by priority. So these two parameters
-must be handled in your program. See pages 12 and 17 in [E1.31][e1.31] for more information.
-Synchronization must also be implemented in your program, but currently there is no way to receive
+The receiver checks for out-of-order packets (inspecting the sequence number) and sorts for priority.
+The channel only gets used for changed DMX data, so it behaves like a change listener.
+Note: this behaiviour is bypassed if there are two or more sources transmitting on the same universe 
+with the same highest priority. Then ALL packets are getting send through the channel (although 
+packets with too low priority will be skipped). Then your program is responsible for sorting or 
+alerting the user.
+
+Synchronization must be implemented in your program, but currently there is no way to receive
 the sACN sync-packets. This feature may come in a future version.
 
 Please note: This implementation is subjected to change!
