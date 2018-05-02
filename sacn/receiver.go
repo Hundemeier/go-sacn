@@ -1,6 +1,7 @@
 package sacn
 
 import (
+	"errors"
 	"net"
 	"time"
 )
@@ -8,100 +9,137 @@ import (
 //Set the timout according to the E1.31 protocol
 const timeoutMs = 2500
 
+//Receiver is for holding the channels for the data and the errors
+type Receiver struct {
+	DataChan chan DataPacket
+	ErrChan  chan error
+	stopChan chan struct{}
+}
+
+//NewReceiver returns a new Receiver object that can be used to listen with it
+func NewReceiver() Receiver {
+	return Receiver{
+		DataChan: make(chan DataPacket),
+		ErrChan:  make(chan error),
+		stopChan: make(chan struct{}),
+	}
+}
+
+//Stop sends a stop signal to the listener and ends the transmission of data or errors in the channels
+func (r *Receiver) Stop() {
+	close(r.stopChan)
+}
+
 //Receive returns two chnnels: one for data and one for errors.
 //the data channel only returns data from the universe that was given.
 //parameters: universe: universe to listen on; bind: the interface on which the listener should bind to.
 //This Receiver checks for out-of-order packets and sorts out packets with too low priority.
-//Note: if there are two sources with the same highest priority, all their data will get through the channel.
+//Note: if there are two sources with the same highest priority, there will be send a
+//"sources exceeded" error in the error channel.
 //Furthermore: through the channel only changed data will be send. So the sequence numbers may not be in order.
-func Receive(universe uint16, bind string) (<-chan DataPacket, <-chan error) {
-	data := make(chan DataPacket)
-	errch := make(chan error)
-
+func (r *Receiver) Receive(universe uint16, bind string) {
 	//Receive the unprocessed data and sort out the ones with the corrct universe
 	go func() {
 		ServerAddr, err := net.ResolveUDPAddr("udp", bind+":5568")
-		errToCh(err, errch)
+		errToCh(err, r.ErrChan)
 
 		ServerConn, err := net.ListenUDP("udp", ServerAddr)
-		errToCh(err, errch)
+		errToCh(err, r.ErrChan)
 		defer ServerConn.Close()
 
-		listenOn(ServerConn, data, errch, universe)
+		r.listenOn(ServerConn, universe)
 	}()
-
-	return data, errch
 }
 
 //ReceiveMulticast is the same as normal Receive, but uses multicast instead.
 //Depending on your OS you have to provide an Interface to bind to.
 //This Receiver checks for out-of-order packets and sorts out packets with too low priority.
-//Note: if there are two sources with the same highest priority, all their data will get through the channel.
+//Note: if there are two sources with the same highest priority, there will be send a
+//"sources exceeded" error in the error channel.
 //Furthermore: through the channel only changed data will be send. So the sequence numbers may not be in order.
 //Note: sometimes the packetloss with multicast can be very high and so expect some unintentional
 //timeouts and therefore closing channels
-func ReceiveMulticast(universe uint16, ifi *net.Interface) (<-chan DataPacket, <-chan error) {
-	data := make(chan DataPacket)
-	errch := make(chan error)
-
+func (r *Receiver) ReceiveMulticast(universe uint16, ifi *net.Interface) {
 	//Receive the unprocessed data and sort out the ones with the corrct universe
 	go func() {
 		ServerAddr, err := net.ResolveUDPAddr("udp", calcMulticastAddr(universe)+":5568")
-		errToCh(err, errch)
+		errToCh(err, r.ErrChan)
 
 		ServerConn, err := net.ListenMulticastUDP("udp", ifi, ServerAddr)
-		errToCh(err, errch)
+		errToCh(err, r.ErrChan)
 		defer ServerConn.Close()
 		//some testing revealed that sometimes in multicast-use packets were lost
 		//this should help out the problem
 		ServerConn.SetReadBuffer(3 * 638)
-		listenOn(ServerConn, data, errch, universe)
+		r.listenOn(ServerConn, universe)
 	}()
-
-	return data, errch
 }
 
-func listenOn(conn *net.UDPConn, data chan<- DataPacket, errch chan<- error, universe uint16) {
+func (r *Receiver) listenOn(conn *net.UDPConn, universe uint16) {
 	buf := make([]byte, 638)
 	//store the lasttime a packet on the universe was received
 	lastTime := time.Now()
+	//store the sequence number of the last valid packet
+	lastSequ := byte(0)
+	//store the last DMX data to check if it was changed
+	var lastData []byte
 	//sources map that stores all sources that have used this universe
 	m := make(map[[16]byte]source)
+F:
 	for {
+		select {
+		case <-r.stopChan:
+			break F //break if we had a stop signal from the stopChannel
+		default:
+		}
 		conn.SetDeadline(time.Now().Add(time.Millisecond * timeoutMs))
 		n, addr, _ := conn.ReadFromUDP(buf) //n, addr, err
 		if addr == nil {                    //Check if we had a timeout
-			break //escape the for loop
+			//that means we did not receive a packet in 2,5s at all
+			r.ErrChan <- errors.New("timeout")
+			continue
 		}
 		p, err := NewDataPacketRaw(buf[0:n])
-		errToCh(err, errch)
+		errToCh(err, r.ErrChan)
 		if p.Universe() == universe {
 			updateSourcesMap(m, p)
 			tmp := getAllowedSources(m)
 
 			//if the length of allowed sources is greater than 1, we have the situation of
-			//multiple sources transmitting on the same priority, so we send all apckets to the channel
+			//multiple sources transmitting on the same priority, so we send sources exceeded to the errchan
 			if len(tmp) > 1 {
-				data <- p
+				r.ErrChan <- errors.New("sources exceeded")
 				continue //skip all steps down
 			}
 			//if the source of this packet is in the allowed sources list, let this packet pass
 			if _, ok := tmp[p.CID()]; ok {
-				//TODO: check for the update of the dmx data-------------------------------------------------------
-				//TODO: check the sequence number (new function?)
-				data <- p
+				//check the sequence
+				if !checkSequ(lastSequ, p.Sequence()) {
+					continue //if the sequence is not good, discard this packet
+				}
+				lastSequ = p.Sequence()
+				//check if the data was changed
+				if !equalData(lastData, p.Data()) {
+					r.DataChan <- p
+					//make a copy as lastData, otherwise it will be a reference
+					lastData = append([]byte(nil), p.Data()...)
+				}
 			}
 
 			if p.StreamTerminated() {
 				//if the stream termination bit was set, we escape the loop to close the channel
-				break
+				//r.ErrChan <- errors.New("stream terminated")
+				continue
 			}
 		} else if time.Since(lastTime) > timeoutMs*time.Millisecond {
-			break
+			//timeout of our universe, this if is needed, because we may receive packets from other
+			//universes but we have to listen only for ours
+			//r.ErrChan <- errors.New("timeout")
+			continue
 		}
 	}
-	close(errch)
-	close(data)
+	close(r.ErrChan)
+	close(r.DataChan)
 }
 
 func errToCh(err error, ch chan<- error) {
@@ -180,4 +218,26 @@ func getAllowedSources(m map[[16]byte]source) map[[16]byte]struct{} {
 		}
 	}
 	return new
+}
+
+func checkSequ(old, new byte) bool {
+	//calculate in int
+	tmp := int(new) - int(old)
+	if tmp <= 0 && tmp > -20 {
+		return false
+	} else {
+		return true
+	}
+}
+
+func equalData(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
