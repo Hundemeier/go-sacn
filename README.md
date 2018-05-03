@@ -60,8 +60,9 @@ provide `nil` as an interface, sometimes you have to use a dedicated interface, 
 Windows needs an interface and linux generally not.
 
 Note that the network infrastructure has to be multicast ready and that on some networks the delay of packets
-will increase. Also the packet loss can be higher if multicast is choosen. Please test your network for 
-more information.
+will increase. Also the packet loss can be higher if multicast is choosen. This can cause unintentional 
+timeouts, if the sources are only transmitting every 2 seconds (like grandMA2 consoles).
+Please test your network for more information.
 
 Example for multicast use:
 ``` go
