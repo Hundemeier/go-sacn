@@ -23,7 +23,10 @@ the sACN sync-packets. This feature may come in a future version.
 
 Please note: This implementation is subjected to change!
 
-Example:
+
+### Unicast
+
+Example for simple unicast listener:
 ``` go
 package main
 
@@ -47,6 +50,47 @@ func main() {
 	//recv.Stop() //use this to stop the receiving of messages and close the channels
 	//Note: This does not stop immediately the channels, worst case: it takes 2,5 seconds
 }
+```
+
+### Multicast
+
+This `Receiver` also uses multicast groups to receive its data. Unicast packets that are received
+are also processed like the normal unicast receiver. Depending on your operating system, you might can 
+provide `nil` as an interface, sometimes you have to use a dedicated interface, to get multicast working.
+Windows needs an interface and linux generally not.
+
+Example for multicast use:
+``` go
+package main
+
+import (
+	"fmt"
+	"net"
+
+	"github.com/Hundemeier/go-sacn/sacn"
+)
+
+func main() {
+	recv := sacn.NewReceiver()
+	//get the interface we use to listen via multicast
+	//see the net package for more information
+	ifi, err := net.InterfaceByName("WLAN")
+	if err != nil {
+		panic(err)
+	}
+	//the use of a dedicated interface is dependend on your OS
+	//if you use Windows you have to provide an interface, on other OS you might not
+	recv.ReceiveMulticast(1, ifi) //receive on the universe 1 and bind to the interface
+	go func() {                   //print every error that occurs
+		for i := range recv.ErrChan {
+			fmt.Println(i)
+		}
+	}()
+	for j := range recv.DataChan {
+		fmt.Println(j.Data())
+	}
+}
+
 ```
 
 [e1.31]: http://tsp.esta.org/tsp/documents/docs/E1-31-2016.pdf
