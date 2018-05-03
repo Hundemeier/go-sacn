@@ -59,6 +59,10 @@ are also processed like the normal unicast receiver. Depending on your operating
 provide `nil` as an interface, sometimes you have to use a dedicated interface, to get multicast working.
 Windows needs an interface and linux generally not.
 
+Note that the network infrastructure has to be multicast ready and that on some networks the delay of packets
+will increase. Also the packet loss can be higher if multicast is choosen. Please test your network for 
+more information.
+
 Example for multicast use:
 ``` go
 package main
