@@ -31,6 +31,8 @@ func NewDataPacket() DataPacket {
 	p.data[117] = vectorDmpSetProperty
 	//set inital FAL
 	p.setFAL(126)
+	//set address and data type
+	p.data[118] = 0xa1
 	//set address increment
 	p.data[122] = 0x1
 	//Default priority:
@@ -217,6 +219,10 @@ func (d *DataPacket) SetData(data []byte) {
 	if len(data) > 512 {
 		data = data[0:512]
 	}
+	//make the length a multiply of 2
+	if len(data)%2 != 0 { //add a 0 to make the length sufficient
+		data = append(data, 0)
+	}
 	d.setFAL(uint16(126 + len(data)))
 	d.replace(126, data)
 }
@@ -224,4 +230,8 @@ func (d *DataPacket) SetData(data []byte) {
 //Data returns the DMX data that is set for this DataPacket. Length: [0-512]
 func (d *DataPacket) Data() []byte {
 	return d.data[126:d.length]
+}
+
+func (d *DataPacket) getBytes() []byte {
+	return d.data[:d.length]
 }
