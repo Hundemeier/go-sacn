@@ -1,7 +1,7 @@
 package sacn
 
 import (
-	"errors"
+	"fmt"
 	"net"
 	"time"
 )
@@ -9,11 +9,11 @@ import (
 //Transmitter : This struct is for managing the transmitting of sACN data.
 //It handles all channels and overwatches what universes are already used.
 type Transmitter struct {
-	universes map[uint16]chan []byte
+	universes map[uint16]chan [512]byte
 	//master stores the master DataPacket for all univereses. Its the last send out packet
 	master      map[uint16]*DataPacket
 	destination map[uint16]*net.UDPAddr //holds the info about the destinations unicast or multicast
-	udp         *net.UDPConn            //stores the udp connection to use
+	bind        string                  //stores the string with the binding information
 	cid         [16]byte                //the global cid for all packets
 	sourceName  string                  //the global source name for all packets
 }
@@ -21,48 +21,51 @@ type Transmitter struct {
 //NewTransmitter creates a new Transmitter object and returns it. Only use one object for one
 //network interface. bind is a string like "192.168.2.34" or "". It is used for binding the udpconnection.
 //In most cases an emtpy string will be sufficient. The caller is responsible for closing!
-func NewTransmitter(bind string, cid [16]byte, sourceName string) (Transmitter, error) {
-	//create a udp socket
-	ServerAddr, err := net.ResolveUDPAddr("udp", bind+":5568")
-	if err != nil {
-		return Transmitter{}, err
-	}
-	ServerConn, err := net.ListenUDP("udp", ServerAddr)
-	if err != nil {
-		return Transmitter{}, err
-	}
-	return Transmitter{
-		universes:   make(map[uint16]chan []byte),
+//If you want to use multicast, you have to provide a binding string on some operation systems (eg Windows).
+func NewTransmitter(binding string, cid [16]byte, sourceName string) (Transmitter, error) {
+	//create tranmsitter:
+	tx := Transmitter{
+		universes:   make(map[uint16]chan [512]byte),
 		master:      make(map[uint16]*DataPacket),
 		destination: make(map[uint16]*net.UDPAddr),
-		udp:         ServerConn,
+		bind:        "",
 		cid:         cid,
 		sourceName:  sourceName,
-	}, nil
-}
-
-//Close closes the udp socket that was used.
-//Note: all channels will be closed, so if you want to transmitt something after this call, a panic will occur
-func (t *Transmitter) Close() error {
-	//close all channels
-	for _, v := range t.universes {
-		close(v)
 	}
-	//close udp socket
-	if t.udp != nil {
-		return t.udp.Close()
+	//create a udp address for testing, if the given bind address is possible
+	addr, err := net.ResolveUDPAddr("udp", binding+":5568")
+	if err != nil {
+		return tx, err
 	}
-	return errors.New("no UDP socket could be closed, because it was nil")
+	serv, err := net.ListenUDP("udp", addr)
+	serv.Close()
+	if err != nil {
+		return tx, err
+	}
+	//if everything is ok, set the bind address string
+	tx.bind = binding
+	return tx, nil
 }
 
 //Activate starts sending out DMX data on the given universe. It returns a channel that accepts
 //byte slices and transmittes them to the unicast or multicast destination.
 //If you want to deactivate the universe, simply close the channel.
-func (t *Transmitter) Activate(universe uint16) (chan<- []byte, error) {
-	if t.udp == nil { //check if a udp socket is provided
-		return nil, errors.New("no UDP socket could be used")
+func (t *Transmitter) Activate(universe uint16) (chan<- [512]byte, error) {
+	//check if the universe is already activated
+	if t.IsActivated(universe) {
+		return nil, fmt.Errorf("the given universe %v is already activated", universe)
 	}
-	ch := make(chan []byte)
+	//create udp socket
+	ServerAddr, err := net.ResolveUDPAddr("udp", t.bind+":5568")
+	if err != nil {
+		return nil, err
+	}
+	serv, err := net.ListenUDP("udp", ServerAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	ch := make(chan [512]byte)
 	t.universes[universe] = ch
 	//init master packet
 	masterPacket := NewDataPacket()
@@ -78,24 +81,24 @@ func (t *Transmitter) Activate(universe uint16) (chan<- []byte, error) {
 			if _, ok := t.master[universe]; !ok {
 				break
 			}
-			t.sendOut(universe)
+			t.sendOut(serv, universe)
 			time.Sleep(time.Second * 1)
 		}
 	}()
 
 	go func() {
 		for i := range ch {
-			if len(i) <= 512 {
-				t.master[universe].SetData(i)
-				t.sendOut(universe)
-			}
+			t.master[universe].SetData(i[:])
+			t.sendOut(serv, universe)
 		}
 		//if the channel was closed we send a last packet with stream terminated bit set
 		t.master[universe].SetStreamTerminated(true)
-		t.sendOut(universe)
+		t.sendOut(serv, universe)
 		//if the channel was closed, we deactivate the universe
 		delete(t.master, universe)
 		delete(t.universes, universe)
+		fmt.Println("Test: serv.close")
+		serv.Close()
 	}()
 
 	return ch, nil
@@ -112,9 +115,6 @@ func (t *Transmitter) IsActivated(universe uint16) bool {
 //SetDestination sets a destination in form of an ip-address or "multicast" to an universe.
 //eg: "192.168.2.34" or "multicast"
 func (t *Transmitter) SetDestination(universe uint16, destination string) error {
-	if !t.IsActivated(universe) {
-		return errors.New("could not assign destination to universe: universe is not activated")
-	}
 	var dest *net.UDPAddr
 	if destination == "multicast" {
 		dest = generateMulticast(universe)
@@ -130,7 +130,7 @@ func (t *Transmitter) SetDestination(universe uint16, destination string) error 
 }
 
 //handles sending and sequence numbering
-func (t *Transmitter) sendOut(universe uint16) {
+func (t *Transmitter) sendOut(server *net.UDPConn, universe uint16) {
 	//only send if the universe was activated
 	if _, ok := t.master[universe]; !ok {
 		return
@@ -145,7 +145,7 @@ func (t *Transmitter) sendOut(universe uint16) {
 	//increase seqeunce number
 	packet := t.master[universe]
 	packet.SequenceIncr()
-	t.udp.WriteToUDP(packet.getBytes(), target)
+	server.WriteToUDP(packet.getBytes(), target)
 }
 
 func generateMulticast(universe uint16) *net.UDPAddr {
