@@ -225,9 +225,8 @@ func checkSequ(old, new byte) bool {
 	tmp := int(new) - int(old)
 	if tmp <= 0 && tmp > -20 {
 		return false
-	} else {
-		return true
 	}
+	return true
 }
 
 func equalData(a, b []byte) bool {
