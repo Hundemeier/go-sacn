@@ -113,12 +113,13 @@ Then you can use a channel for 512-byte arrays to transmitt them over the networ
 
 There are two different types of addressing the receiver: unicast and multicast. 
 When using multicast, note that you have to provide a bind address on some operating systems 
-(eg Windows). If no other destination is provided, the transmitter falls back to multicast, so if 
-you did not specify a bind address on eg Windows, no data is send out.
-
-Destinations can be set on a universe-basis, so currently there is no option to send out the 
-data of one universe to multiple unicast receivers. Destinations can be set via 
-`transmitter.SetDestination(<universe uint16>, <destination string>)`.
+(eg Windows). You can use both at the same time and any number of unicast addresses.
+To set wether multicast should be used, call `transmitter.SetMulticast(<universe>, <bool>)`.
+You can set multiple unicast destinations as slice via 
+`transmitter.SetDestinations(<universe>, <[]string>)`. 
+Note that any existing destinations will be overwritten. If you want to append a destination, you 
+can use `transmitter.Destination(<universe>)` which returns a deep copy of the used net.UDPAddr
+objects.
 
 ### Example
 
@@ -139,15 +140,22 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	
 	//activates the first universe
 	ch, err := trans.Activate(1)
 	if err != nil {
 		log.Fatal(err)
 	}
-	//deactivate the first universe on exit
+	//deactivate the channel on exit
 	defer close(ch)
-	//set a unicast destination, or use "multicast"
-	trans.SetDestination(1, "192.168.1.2")
+	
+	//set a unicast destination, and/or use multicast
+	trans.SetMulticast(1, true)//this specific setup will not multicast on windows, 
+	//because no bind address was provided
+	
+	//set some example ip-addresses
+	trans.SetDestinations(1, []string{"192.168.1.13", "192.168.1.1"})
+	
 	//send some random data for 10 seconds
 	for i := 0; i < 20; i++ {
 		ch <- [512]byte{byte(rand.Int()), byte(i & 0xFF)}

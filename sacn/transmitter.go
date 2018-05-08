@@ -11,11 +11,12 @@ import (
 type Transmitter struct {
 	universes map[uint16]chan [512]byte
 	//master stores the master DataPacket for all univereses. Its the last send out packet
-	master      map[uint16]*DataPacket
-	destination map[uint16]*net.UDPAddr //holds the info about the destinations unicast or multicast
-	bind        string                  //stores the string with the binding information
-	cid         [16]byte                //the global cid for all packets
-	sourceName  string                  //the global source name for all packets
+	master       map[uint16]*DataPacket
+	destinations map[uint16][]net.UDPAddr //holds the info about the destinations unicast or multicast
+	multicast    map[uint16]bool          //stores if an universe should be send out as multicast
+	bind         string                   //stores the string with the binding information
+	cid          [16]byte                 //the global cid for all packets
+	sourceName   string                   //the global source name for all packets
 }
 
 //NewTransmitter creates a new Transmitter object and returns it. Only use one object for one
@@ -25,12 +26,13 @@ type Transmitter struct {
 func NewTransmitter(binding string, cid [16]byte, sourceName string) (Transmitter, error) {
 	//create tranmsitter:
 	tx := Transmitter{
-		universes:   make(map[uint16]chan [512]byte),
-		master:      make(map[uint16]*DataPacket),
-		destination: make(map[uint16]*net.UDPAddr),
-		bind:        "",
-		cid:         cid,
-		sourceName:  sourceName,
+		universes:    make(map[uint16]chan [512]byte),
+		master:       make(map[uint16]*DataPacket),
+		destinations: make(map[uint16][]net.UDPAddr),
+		multicast:    make(map[uint16]bool),
+		bind:         "",
+		cid:          cid,
+		sourceName:   sourceName,
 	}
 	//create a udp address for testing, if the given bind address is possible
 	addr, err := net.ResolveUDPAddr("udp", binding+":5568")
@@ -104,7 +106,7 @@ func (t *Transmitter) Activate(universe uint16) (chan<- [512]byte, error) {
 	return ch, nil
 }
 
-//IsActivated checks if the given universe was activetd and returns true if this is the case
+//IsActivated checks if the given universe was activated and returns true if this is the case
 func (t *Transmitter) IsActivated(universe uint16) bool {
 	if _, ok := t.universes[universe]; ok {
 		return true
@@ -112,21 +114,42 @@ func (t *Transmitter) IsActivated(universe uint16) bool {
 	return false
 }
 
-//SetDestination sets a destination in form of an ip-address or "multicast" to an universe.
-//eg: "192.168.2.34" or "multicast"
-func (t *Transmitter) SetDestination(universe uint16, destination string) error {
-	var dest *net.UDPAddr
-	if destination == "multicast" {
-		dest = generateMulticast(universe)
-	} else {
-		addr, err := net.ResolveUDPAddr("udp", destination+":5568")
+//SetMulticast is for setting wether or not a universe should be send out via multicast.
+//Keep in mind, that on some operating systems you have to provide a bind address.
+func (t *Transmitter) SetMulticast(universe uint16, multicast bool) {
+	t.multicast[universe] = multicast
+}
+
+//SetDestinations sets a slice of destinations for the universe that is used for sending out.
+//So multiple destinations are supported. Note: the exisitng slice will be overwritten!
+//If you want no unicasting, just set an empty slice. If there is a string that could not be
+//converted to an ip-address, this one is left out and an error slice will be returned,
+//but the indices of the errors are not the same as the string indices on which the errors happended.
+func (t *Transmitter) SetDestinations(universe uint16, destinations []string) []error {
+	newDest := make([]net.UDPAddr, 0)
+	errs := make([]error, 0)
+
+	for _, dest := range destinations {
+		addr, err := net.ResolveUDPAddr("udp", dest+":5568")
 		if err != nil {
-			return err
+			errs = append(errs, err)
 		}
-		dest = addr
+		newDest = append(newDest, *addr)
 	}
-	t.destination[universe] = dest
-	return nil
+	t.destinations[universe] = newDest
+
+	if len(errs) == 0 {
+		return nil
+	}
+	return errs
+}
+
+//Destinations returns all destinations that have been set via SetDestinations. Note: the returned
+//slice contains deep copys and no change will affect the internal slice.
+func (t *Transmitter) Destinations(universe uint16) []net.UDPAddr {
+	new := make([]net.UDPAddr, len(t.destinations[universe]))
+	copy(new, t.destinations[universe])
+	return new
 }
 
 //handles sending and sequence numbering
@@ -135,17 +158,17 @@ func (t *Transmitter) sendOut(server *net.UDPConn, universe uint16) {
 	if _, ok := t.master[universe]; !ok {
 		return
 	}
-	//if no destination is available use multicast
-	var target *net.UDPAddr
-	if t.destination[universe] == nil {
-		target = generateMulticast(universe)
-	} else {
-		target = t.destination[universe]
-	}
 	//increase seqeunce number
 	packet := t.master[universe]
 	packet.SequenceIncr()
-	server.WriteToUDP(packet.getBytes(), target)
+	//check if we have to transmitt via multicast
+	if t.multicast[universe] {
+		server.WriteToUDP(packet.getBytes(), generateMulticast(universe))
+	}
+	//for every destination, send out
+	for _, dest := range t.destinations[universe] {
+		server.WriteToUDP(packet.getBytes(), &dest)
+	}
 }
 
 func generateMulticast(universe uint16) *net.UDPAddr {
