@@ -45,7 +45,7 @@ func main() {
 		}
 	}()
 	for j := range recv.DataChan {
-		fmt.Println(j.Sequence())
+		fmt.Println(j.Data())
 	}
 	//recv.Stop() //use this to stop the receiving of messages and close the channels
 	//Note: This does not stop immediately the channels, worst case: it takes 2,5 seconds
