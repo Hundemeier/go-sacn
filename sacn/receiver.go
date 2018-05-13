@@ -37,18 +37,23 @@ func (r *Receiver) Stop() {
 //Note: if there are two sources with the same highest priority, there will be send a
 //"sources exceeded" error in the error channel.
 //Furthermore: through the channel only changed data will be send. So the sequence numbers may not be in order.
-func (r *Receiver) Receive(universe uint16, bind string) {
+func (r *Receiver) Receive(universe uint16, bind string) error {
+	ServerAddr, err := net.ResolveUDPAddr("udp", bind+":5568")
+	errToCh(err, r.ErrChan)
+
+	ServerConn, err := net.ListenUDP("udp", ServerAddr)
+	errToCh(err, r.ErrChan)
+	//do not start goroutine when the socket could not be created
+	if err != nil {
+		return err
+	}
+
 	//Receive the unprocessed data and sort out the ones with the corrct universe
 	go func() {
-		ServerAddr, err := net.ResolveUDPAddr("udp", bind+":5568")
-		errToCh(err, r.ErrChan)
-
-		ServerConn, err := net.ListenUDP("udp", ServerAddr)
-		errToCh(err, r.ErrChan)
 		defer ServerConn.Close()
-
 		r.listenOn(ServerConn, universe)
 	}()
+	return nil
 }
 
 //ReceiveMulticast is the same as normal Receive, but uses multicast instead.
@@ -59,20 +64,26 @@ func (r *Receiver) Receive(universe uint16, bind string) {
 //Furthermore: through the channel only changed data will be send. So the sequence numbers may not be in order.
 //Note: sometimes the packetloss with multicast can be very high and so expect some unintentional
 //timeouts and therefore closing channels
-func (r *Receiver) ReceiveMulticast(universe uint16, ifi *net.Interface) {
+func (r *Receiver) ReceiveMulticast(universe uint16, ifi *net.Interface) error {
+	ServerAddr, err := net.ResolveUDPAddr("udp", calcMulticastAddr(universe)+":5568")
+	errToCh(err, r.ErrChan)
+
+	ServerConn, err := net.ListenMulticastUDP("udp", ifi, ServerAddr)
+	errToCh(err, r.ErrChan)
+	//do not start goroutine when the socket could not be created
+	if err != nil {
+		return err
+	}
+
 	//Receive the unprocessed data and sort out the ones with the corrct universe
 	go func() {
-		ServerAddr, err := net.ResolveUDPAddr("udp", calcMulticastAddr(universe)+":5568")
-		errToCh(err, r.ErrChan)
-
-		ServerConn, err := net.ListenMulticastUDP("udp", ifi, ServerAddr)
-		errToCh(err, r.ErrChan)
 		defer ServerConn.Close()
 		//some testing revealed that sometimes in multicast-use packets were lost
 		//this should help out the problem
 		ServerConn.SetReadBuffer(3 * 638)
 		r.listenOn(ServerConn, universe)
 	}()
+	return nil
 }
 
 func (r *Receiver) listenOn(conn *net.UDPConn, universe uint16) {

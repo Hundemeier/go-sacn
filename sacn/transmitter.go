@@ -35,7 +35,7 @@ func NewTransmitter(binding string, cid [16]byte, sourceName string) (Transmitte
 		sourceName:   sourceName,
 	}
 	//create a udp address for testing, if the given bind address is possible
-	addr, err := net.ResolveUDPAddr("udp", binding+":5568")
+	addr, err := net.ResolveUDPAddr("udp", binding)
 	if err != nil {
 		return tx, err
 	}
@@ -58,7 +58,7 @@ func (t *Transmitter) Activate(universe uint16) (chan<- [512]byte, error) {
 		return nil, fmt.Errorf("the given universe %v is already activated", universe)
 	}
 	//create udp socket
-	ServerAddr, err := net.ResolveUDPAddr("udp", t.bind+":5568")
+	ServerAddr, err := net.ResolveUDPAddr("udp", t.bind)
 	if err != nil {
 		return nil, err
 	}
