@@ -38,14 +38,17 @@ import (
 
 func main() {
 	recv := sacn.NewReceiver()
-	recv.Receive(1, "") //receive on the universe 1 and bind to all interfaces
+	err := recv.Receive(1, "") //receive on the universe 1 and bind to all interfaces
+	if err != nil {
+		panic(err)
+	}
 	go func() {         //print every error that occurs
 		for i := range recv.ErrChan {
 			fmt.Println(i)
 		}
 	}()
 	for j := range recv.DataChan {
-		fmt.Println(j.Sequence())
+		fmt.Println(j.Data())
 	}
 	//recv.Stop() //use this to stop the receiving of messages and close the channels
 	//Note: This does not stop immediately the channels, worst case: it takes 2,5 seconds
@@ -85,10 +88,13 @@ func main() {
 	}
 	//the use of a dedicated interface is dependend on your OS
 	//if you use Windows you have to provide an interface, on other OS you might not
-	recv.ReceiveMulticast(1, ifi) //receive on the universe 1 and bind to the interface
-	go func() {                   //print every error that occurs
+	err := recv.ReceiveMulticast(1, ifi) //receive on the universe 1 and bind to the interface
+	if err != nil {
+		panic(err)
+	}
+	go func() {                   
 		for i := range recv.ErrChan {
-			fmt.Println(i)
+			fmt.Println(i)//print every error that occurs
 		}
 	}()
 	for j := range recv.DataChan {
