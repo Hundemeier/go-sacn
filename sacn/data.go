@@ -55,7 +55,7 @@ func NewDataPacketRaw(raw []byte) (DataPacket, error) {
 	} else if len(raw) > 638 { //cut off the last bits if too long
 		raw = raw[:638]
 	}
-	p.data = raw
+	p.data = append([]byte(nil), raw...) //make a copy of the slice, we do not want to use a reference
 	p.length = uint16(getAsUint32(raw[123:125]) + 125)
 	return p, nil
 }

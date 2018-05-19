@@ -17,7 +17,7 @@ type Receiver struct {
 }
 
 //NewReceiver returns a new Receiver object that can be used to listen with it
-func NewReceiver() Receiver {
+func newReceiver() Receiver {
 	return Receiver{
 		DataChan: make(chan DataPacket),
 		ErrChan:  make(chan error),
@@ -37,7 +37,8 @@ func (r *Receiver) Stop() {
 //Note: if there are two sources with the same highest priority, there will be send a
 //"sources exceeded" error in the error channel.
 //Furthermore: through the channel only changed data will be send. So the sequence numbers may not be in order.
-func (r *Receiver) Receive(universe uint16, bind string) error {
+func Receive(universe uint16, bind string) (Receiver, error) {
+	r := newReceiver()
 	ServerAddr, err := net.ResolveUDPAddr("udp", bind+":5568")
 	errToCh(err, r.ErrChan)
 
@@ -45,15 +46,18 @@ func (r *Receiver) Receive(universe uint16, bind string) error {
 	errToCh(err, r.ErrChan)
 	//do not start goroutine when the socket could not be created
 	if err != nil {
-		return err
+		close(r.stopChan) // close the receiver when returning, so that it has no function
+		close(r.DataChan)
+		close(r.ErrChan)
+		return r, err
 	}
 
 	//Receive the unprocessed data and sort out the ones with the corrct universe
 	go func() {
 		defer ServerConn.Close()
-		r.listenOn(ServerConn, universe, r.breakCondition)
+		listenOn(ServerConn, universe, r.breakCondition, r.ErrChan, r.DataChan)
 	}()
-	return nil
+	return r, nil
 }
 
 //ReceiveMulticast is the same as normal Receive, but uses multicast instead.
@@ -64,7 +68,8 @@ func (r *Receiver) Receive(universe uint16, bind string) error {
 //Furthermore: through the channel only changed data will be send. So the sequence numbers may not be in order.
 //Note: sometimes the packetloss with multicast can be very high and so expect some unintentional
 //timeouts and therefore closing channels
-func (r *Receiver) ReceiveMulticast(universe uint16, ifi *net.Interface) error {
+func ReceiveMulticast(universe uint16, ifi *net.Interface) (Receiver, error) {
+	r := newReceiver()
 	ServerAddr, err := net.ResolveUDPAddr("udp", calcMulticastAddr(universe)+":5568")
 	errToCh(err, r.ErrChan)
 
@@ -72,7 +77,10 @@ func (r *Receiver) ReceiveMulticast(universe uint16, ifi *net.Interface) error {
 	errToCh(err, r.ErrChan)
 	//do not start goroutine when the socket could not be created
 	if err != nil {
-		return err
+		close(r.stopChan) // close the receiver when returning, so that it has no function
+		close(r.DataChan)
+		close(r.ErrChan)
+		return r, err
 	}
 
 	//Receive the unprocessed data and sort out the ones with the corrct universe
@@ -81,9 +89,9 @@ func (r *Receiver) ReceiveMulticast(universe uint16, ifi *net.Interface) error {
 		//some testing revealed that sometimes in multicast-use packets were lost
 		//this should help out the problem
 		ServerConn.SetReadBuffer(3 * 638)
-		r.listenOn(ServerConn, universe, r.breakCondition)
+		listenOn(ServerConn, universe, r.breakCondition, r.ErrChan, r.DataChan)
 	}()
-	return nil
+	return r, nil
 }
 
 func (r *Receiver) breakCondition() bool {
@@ -96,7 +104,7 @@ func (r *Receiver) breakCondition() bool {
 }
 
 //breakCondition: if this function return true, the listening will be breaked
-func (r *Receiver) listenOn(conn *net.UDPConn, universe uint16, breakCondition func() bool) {
+func listenOn(conn *net.UDPConn, universe uint16, breakCondition func() bool, errChan chan<- error, dataChan chan<- DataPacket) {
 	buf := make([]byte, 638)
 	//store the lasttime a packet on the universe was received
 	lastTime := time.Now()
@@ -116,11 +124,11 @@ F:
 		n, addr, _ := conn.ReadFromUDP(buf) //n, addr, err
 		if addr == nil {                    //Check if we had a timeout
 			//that means we did not receive a packet in 2,5s at all
-			r.ErrChan <- errors.New("timeout")
+			errChan <- errors.New("timeout")
 			continue
 		}
 		p, err := NewDataPacketRaw(buf[0:n])
-		errToCh(err, r.ErrChan)
+		errToCh(err, errChan)
 		if p.Universe() == universe {
 			updateSourcesMap(m, p)
 			tmp := getAllowedSources(m)
@@ -128,7 +136,7 @@ F:
 			//if the length of allowed sources is greater than 1, we have the situation of
 			//multiple sources transmitting on the same priority, so we send sources exceeded to the errchan
 			if len(tmp) > 1 {
-				r.ErrChan <- errors.New("sources exceeded")
+				errChan <- errors.New("sources exceeded")
 				continue //skip all steps down
 			}
 			//if the source of this packet is in the allowed sources list, let this packet pass
@@ -140,7 +148,7 @@ F:
 				lastSequ = p.Sequence()
 				//check if the data was changed
 				if !equalData(lastData, p.Data()) {
-					r.DataChan <- p
+					dataChan <- p
 					//make a copy as lastData, otherwise it will be a reference
 					lastData = append([]byte(nil), p.Data()...)
 				}
@@ -158,8 +166,8 @@ F:
 			continue
 		}
 	}
-	close(r.ErrChan)
-	close(r.DataChan)
+	close(errChan)
+	close(dataChan)
 }
 
 func errToCh(err error, ch chan<- error) {
