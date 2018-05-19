@@ -9,6 +9,8 @@ import (
 //Set the timout according to the E1.31 protocol
 const timeoutMs = 2500
 
+var socketRecv *net.UDPConn
+
 //Receiver is for holding the channels for the data and the errors
 type Receiver struct {
 	DataChan chan DataPacket
@@ -39,17 +41,23 @@ func (r *Receiver) Stop() {
 //Furthermore: through the channel only changed data will be send. So the sequence numbers may not be in order.
 func Receive(universe uint16, bind string) (Receiver, error) {
 	r := newReceiver()
-	ServerAddr, err := net.ResolveUDPAddr("udp", bind+":5568")
-	errToCh(err, r.ErrChan)
+	var ServerConn *net.UDPConn
+	if socketRecv == nil {
+		ServerAddr, err := net.ResolveUDPAddr("udp", bind+":5568")
+		errToCh(err, r.ErrChan)
 
-	ServerConn, err := net.ListenUDP("udp", ServerAddr)
-	errToCh(err, r.ErrChan)
-	//do not start goroutine when the socket could not be created
-	if err != nil {
-		close(r.stopChan) // close the receiver when returning, so that it has no function
-		close(r.DataChan)
-		close(r.ErrChan)
-		return r, err
+		ServerConn, err = net.ListenUDP("udp", ServerAddr)
+		errToCh(err, r.ErrChan)
+		//do not start goroutine when the socket could not be created
+		if err != nil {
+			close(r.stopChan) // close the receiver when returning, so that it has no function
+			close(r.DataChan)
+			close(r.ErrChan)
+			return r, err
+		}
+		socketRecv = ServerConn
+	} else {
+		ServerConn = socketRecv
 	}
 
 	//Receive the unprocessed data and sort out the ones with the corrct universe
@@ -70,17 +78,23 @@ func Receive(universe uint16, bind string) (Receiver, error) {
 //timeouts and therefore closing channels
 func ReceiveMulticast(universe uint16, ifi *net.Interface) (Receiver, error) {
 	r := newReceiver()
-	ServerAddr, err := net.ResolveUDPAddr("udp", calcMulticastAddr(universe)+":5568")
-	errToCh(err, r.ErrChan)
+	var ServerConn *net.UDPConn
+	if socketRecv == nil {
+		ServerAddr, err := net.ResolveUDPAddr("udp", calcMulticastAddr(universe)+":5568")
+		errToCh(err, r.ErrChan)
 
-	ServerConn, err := net.ListenMulticastUDP("udp", ifi, ServerAddr)
-	errToCh(err, r.ErrChan)
-	//do not start goroutine when the socket could not be created
-	if err != nil {
-		close(r.stopChan) // close the receiver when returning, so that it has no function
-		close(r.DataChan)
-		close(r.ErrChan)
-		return r, err
+		ServerConn, err = net.ListenMulticastUDP("udp", ifi, ServerAddr)
+		errToCh(err, r.ErrChan)
+		//do not start goroutine when the socket could not be created
+		if err != nil {
+			close(r.stopChan) // close the receiver when returning, so that it has no function
+			close(r.DataChan)
+			close(r.ErrChan)
+			return r, err
+		}
+		socketRecv = ServerConn
+	} else {
+		ServerConn = socketRecv
 	}
 
 	//Receive the unprocessed data and sort out the ones with the corrct universe
