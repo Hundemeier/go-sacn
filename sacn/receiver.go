@@ -51,7 +51,7 @@ func (r *Receiver) Receive(universe uint16, bind string) error {
 	//Receive the unprocessed data and sort out the ones with the corrct universe
 	go func() {
 		defer ServerConn.Close()
-		r.listenOn(ServerConn, universe)
+		r.listenOn(ServerConn, universe, r.breakCondition)
 	}()
 	return nil
 }
@@ -81,12 +81,22 @@ func (r *Receiver) ReceiveMulticast(universe uint16, ifi *net.Interface) error {
 		//some testing revealed that sometimes in multicast-use packets were lost
 		//this should help out the problem
 		ServerConn.SetReadBuffer(3 * 638)
-		r.listenOn(ServerConn, universe)
+		r.listenOn(ServerConn, universe, r.breakCondition)
 	}()
 	return nil
 }
 
-func (r *Receiver) listenOn(conn *net.UDPConn, universe uint16) {
+func (r *Receiver) breakCondition() bool {
+	select {
+	case <-r.stopChan:
+		return true //break if we had a stop signal from the stopChannel
+	default:
+		return false
+	}
+}
+
+//breakCondition: if this function return true, the listening will be breaked
+func (r *Receiver) listenOn(conn *net.UDPConn, universe uint16, breakCondition func() bool) {
 	buf := make([]byte, 638)
 	//store the lasttime a packet on the universe was received
 	lastTime := time.Now()
@@ -98,11 +108,10 @@ func (r *Receiver) listenOn(conn *net.UDPConn, universe uint16) {
 	m := make(map[[16]byte]source)
 F:
 	for {
-		select {
-		case <-r.stopChan:
-			break F //break if we had a stop signal from the stopChannel
-		default:
+		if breakCondition() {
+			break F
 		}
+
 		conn.SetDeadline(time.Now().Add(time.Millisecond * timeoutMs))
 		n, addr, _ := conn.ReadFromUDP(buf) //n, addr, err
 		if addr == nil {                    //Check if we had a timeout
