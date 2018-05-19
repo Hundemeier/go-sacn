@@ -37,12 +37,11 @@ import (
 )
 
 func main() {
-	recv := sacn.NewReceiver()
-	err := recv.Receive(1, "") //receive on the universe 1 and bind to all interfaces
+	recv, err := sacn.Receive(1, "") //receive on the universe 1 and bind to all interfaces
 	if err != nil {
 		panic(err)
 	}
-	go func() {         //print every error that occurs
+	go func() { //print every error that occurs
 		for i := range recv.ErrChan {
 			fmt.Println(i)
 		}
@@ -50,21 +49,21 @@ func main() {
 	for j := range recv.DataChan {
 		fmt.Println(j.Data())
 	}
-	//recv.Stop() //use this to stop the receiving of messages and close the channels
+	//recv.Stop() //use this to stop the receiving of messages and close the channel
 	//Note: This does not stop immediately the channels, worst case: it takes 2,5 seconds
 }
 ```
 
 ### Multicast
 
-This `Receiver` also uses multicast groups to receive its data. Unicast packets that are received
+This `Receiver` uses multicast groups to receive its data. Unicast packets that are received
 are also processed like the normal unicast receiver. Depending on your operating system, you might can 
 provide `nil` as an interface, sometimes you have to use a dedicated interface, to get multicast working.
 Windows needs an interface and linux generally not.
 
-Note that the network infrastructure has to be multicast ready and that on some networks the delay of packets
-will increase. Also the packet loss can be higher if multicast is choosen. This can cause unintentional 
-timeouts, if the sources are only transmitting every 2 seconds (like grandMA2 consoles).
+Note that the network infrastructure has to be multicast ready and that on some networks the delay of 
+packets will increase. Also the packet loss can be higher if multicast is choosen. This can cause 
+unintentional timeouts, if the sources are only transmitting every 2 seconds (like grandMA2 consoles).
 Please test your network for more information.
 
 Example for multicast use:
@@ -79,7 +78,6 @@ import (
 )
 
 func main() {
-	recv := sacn.NewReceiver()
 	//get the interface we use to listen via multicast
 	//see the net package for more information
 	ifi, err := net.InterfaceByName("WLAN")
@@ -88,13 +86,13 @@ func main() {
 	}
 	//the use of a dedicated interface is dependend on your OS
 	//if you use Windows you have to provide an interface, on other OS you might not
-	err := recv.ReceiveMulticast(1, ifi) //receive on the universe 1 and bind to the interface
+	recv, err := sacn.ReceiveMulticast(1, ifi) //receive on the universe 1 and bind to the interface
 	if err != nil {
 		panic(err)
 	}
-	go func() {                   
+	go func() {
 		for i := range recv.ErrChan {
-			fmt.Println(i)//print every error that occurs
+			fmt.Println(i) //print every error that occurs
 		}
 	}()
 	for j := range recv.DataChan {
