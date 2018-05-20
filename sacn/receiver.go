@@ -10,6 +10,7 @@ import (
 const timeoutMs = 2500
 
 var socketRecv *net.UDPConn
+var socketRecvMulticast *net.UDPConn
 
 //Receiver is for holding the channels for the data and the errors
 type Receiver struct {
@@ -79,7 +80,7 @@ func Receive(universe uint16, bind string) (Receiver, error) {
 func ReceiveMulticast(universe uint16, ifi *net.Interface) (Receiver, error) {
 	r := newReceiver()
 	var ServerConn *net.UDPConn
-	if socketRecv == nil {
+	if socketRecvMulticast == nil {
 		ServerAddr, err := net.ResolveUDPAddr("udp", calcMulticastAddr(universe)+":5568")
 		errToCh(err, r.ErrChan)
 
@@ -92,9 +93,9 @@ func ReceiveMulticast(universe uint16, ifi *net.Interface) (Receiver, error) {
 			close(r.ErrChan)
 			return r, err
 		}
-		socketRecv = ServerConn
+		socketRecvMulticast = ServerConn
 	} else {
-		ServerConn = socketRecv
+		ServerConn = socketRecvMulticast
 	}
 
 	//Receive the unprocessed data and sort out the ones with the corrct universe
