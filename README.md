@@ -112,7 +112,7 @@ func main() {
 You can stop the receiving of packets on a Receiver via `receiver.Stop()`. 
 Please note that it can take up to 2,5s to stop the receiving and close all channels.
 If you have stoped a receiver once, you can not start listening again. You have to create a 
-new `Receiver` object via `sacn.NewReceiver()`.
+new `Receiver` object via `sacn.NewReceiverSocket()`.
 
 ## Transmitting
 
