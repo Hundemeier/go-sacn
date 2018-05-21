@@ -6,6 +6,8 @@ This is by no means a full implementation yet, but may be in the future.
 If you want to see a full DMX package, see the 
 [OLA](http://opendmx.net/index.php/Open_Lighting_Architecture) project.
 
+There is also some documentation on [godoc.org](https://godoc.org/github.com/Hundemeier/go-sacn/sacn).
+
 ## Receiving
 **BETA!**
 
