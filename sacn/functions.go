@@ -3,6 +3,7 @@ package sacn
 import (
 	"fmt"
 	"math"
+	"net"
 )
 
 //CalculateFal : Calculates the two bytes of a FlagsAndLength field of a sACN packet
@@ -31,4 +32,9 @@ func getAsUint32(arr []byte) uint32 {
 func calcMulticastAddr(universe uint16) string {
 	byt := getAsBytes16(universe)
 	return fmt.Sprintf("239.255.%v.%v", byt[0], byt[1])
+}
+
+func calcMulticastUDPAddr(universe uint16) *net.UDPAddr {
+	addr, _ := net.ResolveUDPAddr("udp", calcMulticastAddr(universe)+":5568")
+	return addr
 }

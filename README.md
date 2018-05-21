@@ -9,8 +9,7 @@ If you want to see a full DMX package, see the
 ## Receiving
 **BETA!**
 
-This is currently the only implemented feature. The simplest way to receive sACN packets is 
-to use `sacn.Receiver`.
+The simplest way to receive sACN packets is to use `sacn.NewReceiverSocket`.
 
 The receiver checks for out-of-order packets (inspecting the sequence number) and sorts for priority.
 The channel only gets used for changed DMX data, so it behaves like a change listener.
@@ -37,29 +36,32 @@ import (
 )
 
 func main() {
-	recv, err := sacn.Receive(1, "") //receive on the universe 1 and bind to all interfaces
+	recv, err := sacn.NewReceiverSocket("", nil)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
-	go func() { //print every error that occurs
-		for i := range recv.ErrChan {
-			fmt.Println(i)
+	defer recv.Close()
+	recv.ActivateUniverse(1, false) // universe 1 received via unicast
+	recv.ActivateUniverse(2, true) //this should use unicast + multicast, but this will only work on
+	//certain operating systems. Because we provided nil as interface in the constructor.
+
+	go func() {
+		for j := range recv.ErrChan {
+			fmt.Println(j)
 		}
 	}()
-	for j := range recv.DataChan {
-		fmt.Println(j.Data())
+	for p := range recv.DataChan {
+		fmt.Println(p.Data())
 	}
-	//recv.Stop() //use this to stop the receiving of messages and close the channel
-	//Note: This does not stop immediately the channels, worst case: it takes 2,5 seconds
 }
 ```
 
 ### Multicast
 
-This `Receiver` uses multicast groups to receive its data. Unicast packets that are received
+This `sacn.ReceiverSocket` can use multicast groups to receive its data. Unicast packets that are received
 are also processed like the normal unicast receiver. Depending on your operating system, you might can 
 provide `nil` as an interface, sometimes you have to use a dedicated interface, to get multicast working.
-Windows needs an interface and linux generally not.
+Windows needs an interface and Linux generally not.
 
 Note that the network infrastructure has to be multicast ready and that on some networks the delay of 
 packets will increase. Also the packet loss can be higher if multicast is choosen. This can cause 
@@ -82,21 +84,24 @@ func main() {
 	//see the net package for more information
 	ifi, err := net.InterfaceByName("WLAN")
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
-	//the use of a dedicated interface is dependend on your OS
-	//if you use Windows you have to provide an interface, on other OS you might not
-	recv, err := sacn.ReceiveMulticast(1, ifi) //receive on the universe 1 and bind to the interface
+	recv, err := sacn.NewReceiverSocket("", ifi) //use the interface we searched for as interface for
+	//multicast use
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
+	defer recv.Close()
+	recv.ActivateUniverse(1, false) //universe 1 is received via unicast
+	recv.ActivateUniverse(2, true) //universe 2 is received via unicast + multicast
+
 	go func() {
-		for i := range recv.ErrChan {
-			fmt.Println(i) //print every error that occurs
+		for j := range recv.ErrChan {
+			fmt.Println(j)
 		}
 	}()
-	for j := range recv.DataChan {
-		fmt.Println(j.Data())
+	for p := range recv.DataChan {
+		fmt.Println(p.Data())
 	}
 }
 
@@ -107,7 +112,7 @@ func main() {
 You can stop the receiving of packets on a Receiver via `receiver.Stop()`. 
 Please note that it can take up to 2,5s to stop the receiving and close all channels.
 If you have stoped a receiver once, you can not start listening again. You have to create a 
-new `Receiver` object via `sacn.NewReceiver()`.
+new `Receiver` object via `sacn.NewReceiverSocket()`.
 
 ## Transmitting
 
