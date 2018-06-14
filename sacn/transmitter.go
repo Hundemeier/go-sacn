@@ -129,6 +129,11 @@ func (t *Transmitter) SetMulticast(universe uint16, multicast bool) {
 	t.multicast[universe] = multicast
 }
 
+//IsMulticast returns wether or not multicast is turned on for the given universe. true: on
+func (t *Transmitter) IsMulticast(universe uint16) bool {
+	return t.multicast[universe]
+}
+
 //SetDestinations sets a slice of destinations for the universe that is used for sending out.
 //So multiple destinations are supported. Note: the exisitng slice will be overwritten!
 //If you want no unicasting, just set an empty slice. If there is a string that could not be
