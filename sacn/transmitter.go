@@ -114,6 +114,15 @@ func (t *Transmitter) IsActivated(universe uint16) bool {
 	return false
 }
 
+//GetActivated returns a slice with all activated universes
+func (t *Transmitter) GetActivated() (list []uint16) {
+	list = make([]uint16, 0)
+	for univ := range t.universes {
+		list = append(list, univ)
+	}
+	return
+}
+
 //SetMulticast is for setting wether or not a universe should be send out via multicast.
 //Keep in mind, that on some operating systems you have to provide a bind address.
 func (t *Transmitter) SetMulticast(universe uint16, multicast bool) {
