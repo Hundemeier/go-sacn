@@ -74,6 +74,7 @@ func (t *Transmitter) Activate(universe uint16) (chan<- [512]byte, error) {
 	masterPacket.SetCID(t.cid)
 	masterPacket.SetSourceName(t.sourceName)
 	masterPacket.SetUniverse(universe)
+	masterPacket.SetData(make([]byte, 512)) //set 0 data
 	t.master[universe] = &masterPacket
 
 	//make goroutine that sends out every second a "keep alive" packet
@@ -99,7 +100,6 @@ func (t *Transmitter) Activate(universe uint16) (chan<- [512]byte, error) {
 		//if the channel was closed, we deactivate the universe
 		delete(t.master, universe)
 		delete(t.universes, universe)
-		fmt.Println("Test: serv.close")
 		serv.Close()
 	}()
 
@@ -114,10 +114,24 @@ func (t *Transmitter) IsActivated(universe uint16) bool {
 	return false
 }
 
+//GetActivated returns a slice with all activated universes
+func (t *Transmitter) GetActivated() (list []uint16) {
+	list = make([]uint16, 0)
+	for univ := range t.universes {
+		list = append(list, univ)
+	}
+	return
+}
+
 //SetMulticast is for setting wether or not a universe should be send out via multicast.
 //Keep in mind, that on some operating systems you have to provide a bind address.
 func (t *Transmitter) SetMulticast(universe uint16, multicast bool) {
 	t.multicast[universe] = multicast
+}
+
+//IsMulticast returns wether or not multicast is turned on for the given universe. true: on
+func (t *Transmitter) IsMulticast(universe uint16) bool {
+	return t.multicast[universe]
 }
 
 //SetDestinations sets a slice of destinations for the universe that is used for sending out.
@@ -133,6 +147,7 @@ func (t *Transmitter) SetDestinations(universe uint16, destinations []string) []
 		addr, err := net.ResolveUDPAddr("udp", dest+":5568")
 		if err != nil {
 			errs = append(errs, err)
+			continue
 		}
 		newDest = append(newDest, *addr)
 	}
