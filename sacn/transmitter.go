@@ -74,6 +74,7 @@ func (t *Transmitter) Activate(universe uint16) (chan<- [512]byte, error) {
 	masterPacket.SetCID(t.cid)
 	masterPacket.SetSourceName(t.sourceName)
 	masterPacket.SetUniverse(universe)
+	masterPacket.SetData(make([]byte, 512)) //set 0 data
 	t.master[universe] = &masterPacket
 
 	//make goroutine that sends out every second a "keep alive" packet
@@ -99,7 +100,6 @@ func (t *Transmitter) Activate(universe uint16) (chan<- [512]byte, error) {
 		//if the channel was closed, we deactivate the universe
 		delete(t.master, universe)
 		delete(t.universes, universe)
-		fmt.Println("Test: serv.close")
 		serv.Close()
 	}()
 
@@ -147,6 +147,7 @@ func (t *Transmitter) SetDestinations(universe uint16, destinations []string) []
 		addr, err := net.ResolveUDPAddr("udp", dest+":5568")
 		if err != nil {
 			errs = append(errs, err)
+			continue
 		}
 		newDest = append(newDest, *addr)
 	}
