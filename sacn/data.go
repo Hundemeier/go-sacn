@@ -84,6 +84,16 @@ func (d *DataPacket) replace(startIndex int, replacement []byte) {
 		append(replacement, d.data[len(replacement)+startIndex:]...)...)
 }
 
+//copy returns a copy of the DataPacket
+func (d *DataPacket) copy() DataPacket {
+	copySlice := make([]byte, len(d.data))
+	copy(copySlice, d.data)
+	return DataPacket{
+		data:   copySlice,
+		length: d.length,
+	}
+}
+
 //SetCID sets the CID unique identifier
 func (d *DataPacket) SetCID(cid [16]byte) {
 	d.replace(22, cid[0:16])

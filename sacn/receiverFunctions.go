@@ -26,15 +26,23 @@ type ReceiverSocket struct {
 	activated    map[uint16]struct{}
 	//a map that stores, wether a universe is activated for listening or not. It is used like a set
 	//se methods: isActive, setActive
-	lastDatas          map[uint16]*lastData
+	lastDatass         map[uint16]*lastData
 	multicastInterface *net.Interface // the interface that is used for joining multicast groups
+	//OnChangeCallback gets called if the data on one universe has changed. Gets called in own goroutine
+	OnChangeCallback func(old DataPacket, new DataPacket)
+	//TimeoutCallback gets called, if a timout on a universe occurs. Gets called in own goroutine
+	TimeoutCallback func(universe uint16)
+	lastDatas       map[uint16]lastData
+	timeoutCalled   map[uint16]bool //true, if the timeout was called. To prevent send a timeoutcallback twice
 }
 
 type lastData struct {
 	sources     map[[16]byte]source
 	lastTime    time.Time
+	lastPacket  DataPacket
 	lastSequ    byte
 	lastDMXdata []byte
+	lastPrio    byte
 }
 
 //ReceiveError contains the universe from which the error occured and the error itself
@@ -51,7 +59,7 @@ in the `NewReceiverSocket`.
 func (r *ReceiverSocket) ActivateUniverse(universe uint16, multicast bool) {
 	//activate universe and set the lastData object for the handling
 	r.setActive(universe, true)
-	r.lastDatas[universe] = &lastData{
+	r.lastDatass[universe] = &lastData{
 		sources:  make(map[[16]byte]source),
 		lastTime: time.Now(),
 	}
@@ -64,7 +72,7 @@ func (r *ReceiverSocket) ActivateUniverse(universe uint16, multicast bool) {
 //data channel. If `universe` was not activated, nothing will happen.
 func (r *ReceiverSocket) DeactivateUniverse(universe uint16) {
 	r.setActive(universe, false)
-	delete(r.lastDatas, universe)
+	delete(r.lastDatass, universe)
 	r.socket.LeaveGroup(r.multicastInterface, calcMulticastUDPAddr(universe))
 }
 

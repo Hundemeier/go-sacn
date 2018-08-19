@@ -1,6 +1,7 @@
 package sacn
 
 import (
+	"bytes"
 	"errors"
 	"net"
 	"time"
@@ -26,7 +27,7 @@ func NewReceiverSocket(bind string, ifi *net.Interface) (ReceiverSocket, error) 
 	r.multicastInterface = ifi
 	r.socket = ipv4.NewPacketConn(ServerConn)
 	r.activated = make(map[uint16]struct{})
-	r.lastDatas = make(map[uint16]*lastData)
+	r.lastDatass = make(map[uint16]*lastData)
 	r.DataChan = make(chan DataPacket)
 	r.ErrChan = make(chan ReceiveError)
 	r.stopListener = make(chan struct{})
@@ -51,35 +52,91 @@ func (r *ReceiverSocket) startListener() {
 			n, _, addr, _ := r.socket.ReadFrom(buf) //n, ControlMessage, addr, err
 			if addr == nil {                        //Check if we had a timeout
 				//that means we did not receive a packet in 2,5s at all
-				//so all handlers are getting a nil
-				for _, univ := range r.GetAllActive() {
-					go r.handle(univ, nil)
-				}
+				r.checkForTimeouts()
 			}
 			p, err := NewDataPacketRaw(buf[0:n])
 			if err != nil {
 				continue //if the packet could not be parsed, just skip it
 			}
 			//send the packet to the responding handler and the other are getting nil
-			if r.isActive(p.Universe()) {
-				go r.handle(p.Universe(), &p)
-			}
-			for _, univ := range r.GetAllActive() {
-				if univ != p.Universe() {
-					go r.handle(univ, nil)
-				}
-			}
+			r.handle(p)
 		}
 		r.socket.Close() //close the channel, if the listener is finished
 	}()
 }
 
-//this function handles the datapacket, which can be nil. universe is the universe, it should handle
-func (r *ReceiverSocket) handle(universe uint16, p *DataPacket) {
+func (r *ReceiverSocket) handle(p DataPacket) {
+	r.checkForTimeouts()
+	//check if we had a change in priority to the last data we received on the universe
+	last, ok := r.lastDatas[p.Universe()]
+	if ok {
+		//check if the last packet is too long ago, then we do not have to check all other things
+		if time.Since(last.lastTime) > time.Millisecond*timeoutMs {
+			//invoke callback and store the new packet and time
+			r.invokeCallbackAndStore(p)
+			return // we are finished with this packet
+		}
+		//we have last data for this universe, so check the priority
+		if last.lastPacket.Priority() == p.Priority() {
+			//we have the same priority
+			//check sequence:
+			if checkSequ(last.lastSequ, p.Sequence()) {
+				//sequence is good:; check if the data has changed. If so, then invoke callback
+				if bytes.Equal(last.lastPacket.Data(), p.Data()) {
+					r.invokeCallbackAndStore(p)
+				}
+			}
+		} else if last.lastPacket.Priority() > p.Priority() {
+			//priority is higher: invoke callback on data change
+			if bytes.Equal(last.lastPacket.Data(), p.Data()) {
+				r.invokeCallbackAndStore(p)
+			}
+			//store the new packet regardless
+			r.storeLastPacket(p)
+		}
+	} else {
+		//store new packet and invoke callback, because we never had data on this one
+		r.invokeCallbackAndStore(p)
+	}
+}
+
+//invokeCallbackAndStore calls the callback if it is present.
+func (r *ReceiverSocket) invokeCallbackAndStore(new DataPacket) {
+	old := r.lastDatas[new.Universe()].lastPacket
+	if r.OnChangeCallback != nil {
+		go r.OnChangeCallback(old, new)
+	}
+	r.storeLastPacket(new)
+}
+
+//storeLastPacket stores the packet in the lastDatas store
+func (r *ReceiverSocket) storeLastPacket(p DataPacket) {
+	r.lastDatas[p.Universe()] = lastData{
+		lastPacket: p.copy(),
+		lastTime:   time.Now(),
+	}
+	r.timeoutCalled[p.Universe()] = false
+}
+
+//checkForTimeouts checks all last data if a universe had a timeout. Calls the timeoutCallback.
+func (r *ReceiverSocket) checkForTimeouts() {
+	for univ, last := range r.lastDatas {
+		if time.Since(last.lastTime) > time.Millisecond*timeoutMs {
+			//timeout
+			if r.TimeoutCallback != nil && !r.timeoutCalled[univ] {
+				go r.TimeoutCallback(univ)
+				r.timeoutCalled[univ] = true
+			}
+		}
+	}
+}
+
+//this function handles the datapacket, which can be nil. universe is the universe, it should handleUniverse
+func (r *ReceiverSocket) handleUniverse(universe uint16, p *DataPacket) {
 	//a handler is called for every packet that has arrived. p may be nil,
 	//if the packet has another universe than `universe`
 	if p != nil && universe == p.Universe() && r.isActive(universe) {
-		m := r.lastDatas[universe].sources
+		m := r.lastDatass[universe].sources
 		updateSourcesMap(m, *p)
 		tmp := getAllowedSources(m)
 
@@ -91,7 +148,7 @@ func (r *ReceiverSocket) handle(universe uint16, p *DataPacket) {
 		}
 		//if the source of this packet is in the allowed sources list, let this packet pass
 		if _, ok := tmp[p.CID()]; ok {
-			lastData := r.lastDatas[universe] //lastData is a pointer, so we can use it as reference
+			lastData := r.lastDatass[universe] //lastData is a pointer, so we can use it as reference
 			//check the sequence
 			if !checkSequ(lastData.lastSequ, p.Sequence()) {
 				return //if the sequence is not good, discard this packet
@@ -105,7 +162,7 @@ func (r *ReceiverSocket) handle(universe uint16, p *DataPacket) {
 				lastData.lastDMXdata = append(make([]byte, 0), p.Data()...)
 			}
 		}
-	} else if time.Since(r.lastDatas[universe].lastTime) > timeoutMs*time.Millisecond {
+	} else if time.Since(r.lastDatass[universe].lastTime) > timeoutMs*time.Millisecond {
 		//timeout of our universe, this if is needed, because we may receive packets from other
 		//universes but we have to listen only for ours
 		errToCh(universe, errors.New("timeout"), r.ErrChan)
