@@ -9,20 +9,11 @@ If you want to see a full DMX package, see the
 There is also some documentation on [godoc.org](https://godoc.org/github.com/Hundemeier/go-sacn/sacn).
 
 ## Receiving
-**BETA!**
 
 The simplest way to receive sACN packets is to use `sacn.NewReceiverSocket`.
 
-The receiver checks for out-of-order packets (inspecting the sequence number) and sorts for priority.
-The channel only gets used for changed DMX data, so it behaves like a change listener.
-Note: if two or more sources are transmitting on the same universe with the same priority, 
-there will be errors send through the error channel with "sources exceeded" as text. 
-No data will be transmitted through the data channel.
-
-Synchronization must be implemented in your program, but currently there is no way to receive
-the sACN sync-packets. This feature may come in a future version.
-
-Please note: This implementation is subjected to change!
+For up-to-date information, visit the 
+[godoc.org](https://godoc.org/github.com/Hundemeier/go-sacn/sacn) website with this repo.
 
 
 ### Unicast

@@ -1,9 +1,8 @@
-/*
-Package sacn is a simple sACN implementation. The standard can be obtained here: http://tsp.esta.org/tsp/documents/docs/E1-31-2016.pdf
+/*Package sacn is a simple sACN implementation. The standard can be obtained here: http://tsp.esta.org/tsp/documents/docs/E1-31-2016.pdf
 
 This is by no means a full implementation yet, but may be in the future.
 If you want to see a full DMX package, see the
-[OLA](http://opendmx.net/index.php/Open_Lighting_Architecture) project.
+http://opendmx.net/index.php/Open_Lighting_Architecture project.
 
 Receiving
 
@@ -22,33 +21,17 @@ Unicast
 
 Example for simple unicast listener:
 
-	package main
-
-	import (
-		"fmt"
-
-		"github.com/Hundemeier/go-sacn/sacn"
-	)
-
-	func main() {
-		recv, err := sacn.NewReceiverSocket("", nil)
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer recv.Close()
-		recv.ActivateUniverse(1, false) // universe 1 received via unicast
-		recv.ActivateUniverse(2, true) //this should use unicast + multicast, but this will only work on
-		//certain operating systems. Because we provided nil as interface in the constructor.
-
-		go func() {
-			for j := range recv.ErrChan {
-				fmt.Println(j)
-			}
-		}()
-		for p := range recv.DataChan {
-			fmt.Println(p.Data())
-		}
+	recv, err := sacn.NewReceiverSocket("", nil)
+	if err != nil {
+		log.Fatal(err)
 	}
+	recv.SetOnChangeCallback(func(old sacn.DataPacket, newD sacn.DataPacket) {
+		fmt.Println("data changed on", newD.Universe())
+	})
+	recv.SetTimeoutCallback(func(univ uint16) {
+		fmt.Println("timeout on", univ)
+	})
+	select {} //only that our program does not exit. Exit with Ctrl+C
 
 Multicast
 
@@ -64,23 +47,16 @@ Please test your network for more information.
 
 Example for multicast use:
 
-	package main
 
-	import (
-		"fmt"
-		"net"
-
-		"github.com/Hundemeier/go-sacn/sacn"
-	)
-
-	func main() {
+	TODO:
 		//get the interface we use to listen via multicast
 		//see the net package for more information
 		ifi, err := net.InterfaceByName("WLAN")
 		if err != nil {
 			log.Fatal(err)
 		}
-		recv, err := sacn.NewReceiverSocket("", ifi) //use the interface we searched for as interface for
+		recv, err := sacn.NewReceiverSocket("", ifi)
+		//use the interface we searched for as interface for
 		//multicast use
 		if err != nil {
 			log.Fatal(err)
@@ -88,23 +64,6 @@ Example for multicast use:
 		defer recv.Close()
 		recv.ActivateUniverse(1, false) //universe 1 is received via unicast
 		recv.ActivateUniverse(2, true) //universe 2 is received via unicast + multicast
-
-		go func() {
-			for j := range recv.ErrChan {
-				fmt.Println(j)
-			}
-		}()
-		for p := range recv.DataChan {
-			fmt.Println(p.Data())
-		}
-	}
-
-Stoping
-
-You can stop the receiving of packets on a Receiver via `receiver.Stop()`.
-Please note that it can take up to 2,5s to stop the receiving and close all channels.
-If you have stoped a receiver once, you can not start listening again. You have to create a
-new `Receiver` object via `sacn.NewReceiverSocket()`.
 
 Transmitting
 
@@ -161,6 +120,5 @@ Example
 			ch <- [512]byte{byte(rand.Int()), byte(i & 0xFF)}
 			time.Sleep(500 * time.Millisecond)
 		}
-	}
-*/
+	}*/
 package sacn
