@@ -29,9 +29,9 @@ type ReceiverSocket struct {
 	lastDatass         map[uint16]*lastData
 	multicastInterface *net.Interface // the interface that is used for joining multicast groups
 	//OnChangeCallback gets called if the data on one universe has changed. Gets called in own goroutine
-	OnChangeCallback func(old DataPacket, new DataPacket)
+	onChangeCallback func(old DataPacket, new DataPacket)
 	//TimeoutCallback gets called, if a timout on a universe occurs. Gets called in own goroutine
-	TimeoutCallback func(universe uint16)
+	timeoutCallback func(universe uint16)
 	lastDatas       map[uint16]lastData
 	timeoutCalled   map[uint16]bool //true, if the timeout was called. To prevent send a timeoutcallback twice
 }
@@ -118,6 +118,16 @@ func equalData(a, b []byte) bool {
 		}
 	}
 	return true
+}
+
+//SetOnChangeCallback sets the given function as callback for the receiver
+func (r *ReceiverSocket) SetOnChangeCallback(callback func(old DataPacket, new DataPacket)) {
+	r.onChangeCallback = callback
+}
+
+//SetTimeoutCallback sets the callback for timeouts
+func (r *ReceiverSocket) SetTimeoutCallback(callback func(universe uint16)) {
+	r.timeoutCallback = callback
 }
 
 func errToCh(universe uint16, err error, ch chan ReceiveError) {

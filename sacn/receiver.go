@@ -11,14 +11,13 @@ import (
 
 /*
 NewReceiverSocket creates a new unicast Receiversocket that is capable of listening on the given
-interface (string is for binding). If the error is not nil, DO NOT receive on the channels
-of the returned object! They will block and never be closed!
+interface (string is for binding).
 The network interface is used to join multicast groups. On some OSes (eg Windows) you have
 to provide an interface for multicast to work. On others "nil" may be enough. If you dont want
 to use multicast for receiving, just provide "nil".
 */
-func NewReceiverSocket(bind string, ifi *net.Interface) (ReceiverSocket, error) {
-	r := ReceiverSocket{}
+func NewReceiverSocket(bind string, ifi *net.Interface) (*ReceiverSocket, error) {
+	r := &ReceiverSocket{}
 
 	ServerConn, err := net.ListenPacket("udp4", bind+":5568")
 	if err != nil {
@@ -27,6 +26,8 @@ func NewReceiverSocket(bind string, ifi *net.Interface) (ReceiverSocket, error) 
 	r.multicastInterface = ifi
 	r.socket = ipv4.NewPacketConn(ServerConn)
 	r.activated = make(map[uint16]struct{})
+	r.lastDatas = make(map[uint16]lastData)
+	r.timeoutCalled = make(map[uint16]bool)
 	r.lastDatass = make(map[uint16]*lastData)
 	r.DataChan = make(chan DataPacket)
 	r.ErrChan = make(chan ReceiveError)
@@ -73,7 +74,10 @@ func (r *ReceiverSocket) handle(p DataPacket) {
 		//check if the last packet is too long ago, then we do not have to check all other things
 		if time.Since(last.lastTime) > time.Millisecond*timeoutMs {
 			//invoke callback and store the new packet and time
-			r.invokeCallbackAndStore(p)
+			if !bytes.Equal(last.lastPacket.Data(), p.Data()) {
+				r.invokeCallbackAndStore(p)
+			}
+			r.storeLastPacket(p)
 			return // we are finished with this packet
 		}
 		//we have last data for this universe, so check the priority
@@ -82,13 +86,14 @@ func (r *ReceiverSocket) handle(p DataPacket) {
 			//check sequence:
 			if checkSequ(last.lastSequ, p.Sequence()) {
 				//sequence is good:; check if the data has changed. If so, then invoke callback
-				if bytes.Equal(last.lastPacket.Data(), p.Data()) {
+				if !bytes.Equal(last.lastPacket.Data(), p.Data()) {
 					r.invokeCallbackAndStore(p)
 				}
+				r.storeLastPacket(p)
 			}
-		} else if last.lastPacket.Priority() > p.Priority() {
+		} else if last.lastPacket.Priority() < p.Priority() {
 			//priority is higher: invoke callback on data change
-			if bytes.Equal(last.lastPacket.Data(), p.Data()) {
+			if !bytes.Equal(last.lastPacket.Data(), p.Data()) {
 				r.invokeCallbackAndStore(p)
 			}
 			//store the new packet regardless
@@ -102,9 +107,15 @@ func (r *ReceiverSocket) handle(p DataPacket) {
 
 //invokeCallbackAndStore calls the callback if it is present.
 func (r *ReceiverSocket) invokeCallbackAndStore(new DataPacket) {
-	old := r.lastDatas[new.Universe()].lastPacket
-	if r.OnChangeCallback != nil {
-		go r.OnChangeCallback(old, new)
+	oldData, ok := r.lastDatas[new.Universe()]
+	var old DataPacket
+	if ok {
+		old = oldData.lastPacket
+	} else {
+		old = NewDataPacket()
+	}
+	if r.onChangeCallback != nil {
+		go r.onChangeCallback(old, new)
 	}
 	r.storeLastPacket(new)
 }
@@ -123,8 +134,8 @@ func (r *ReceiverSocket) checkForTimeouts() {
 	for univ, last := range r.lastDatas {
 		if time.Since(last.lastTime) > time.Millisecond*timeoutMs {
 			//timeout
-			if r.TimeoutCallback != nil && !r.timeoutCalled[univ] {
-				go r.TimeoutCallback(univ)
+			if r.timeoutCallback != nil && !r.timeoutCalled[univ] {
+				go r.timeoutCallback(univ)
 				r.timeoutCalled[univ] = true
 			}
 		}
