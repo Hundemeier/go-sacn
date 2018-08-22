@@ -38,3 +38,12 @@ func calcMulticastUDPAddr(universe uint16) *net.UDPAddr {
 	addr, _ := net.ResolveUDPAddr("udp", calcMulticastAddr(universe)+":5568")
 	return addr
 }
+
+func checkSequ(old, new byte) bool {
+	//calculate in int
+	tmp := int(new) - int(old)
+	if tmp <= 0 && tmp > -20 {
+		return false
+	}
+	return true
+}

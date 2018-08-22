@@ -41,29 +41,29 @@ provide `nil` as an interface, sometimes you have to use a dedicated interface, 
 Windows needs an interface and Linux generally not.
 
 Note that the network infrastructure has to be multicast ready and that on some networks the delay of
-packets will increase. Also the packet loss can be higher if multicast is choosen. This can cause
-unintentional timeouts, if the sources are only transmitting every 2 seconds (like grandMA2 consoles).
-Please test your network for more information.
+packets will increase. Also the packet loss can be higher if multicast is choosen
+(This is often a problem when WLAN is used). This can cause unintentional timeouts, if the sources
+are only transmitting every 2 seconds (like grandMA2 consoles).
 
 Example for multicast use:
 
-
-	TODO:
-		//get the interface we use to listen via multicast
-		//see the net package for more information
-		ifi, err := net.InterfaceByName("WLAN")
-		if err != nil {
-			log.Fatal(err)
-		}
-		recv, err := sacn.NewReceiverSocket("", ifi)
-		//use the interface we searched for as interface for
-		//multicast use
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer recv.Close()
-		recv.ActivateUniverse(1, false) //universe 1 is received via unicast
-		recv.ActivateUniverse(2, true) //universe 2 is received via unicast + multicast
+	//get the interface we use to listen via multicast
+	//see the net package for more information
+	ifi, err := net.InterfaceByName("WLAN")
+	if err != nil {
+		log.Fatal(err)
+	}
+	recv, err := sacn.NewReceiverSocket("", ifi)
+	//use the interface we searched for as interface for
+	//multicast use
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer recv.Close()
+	recv.SetOnChangeCallback(func(old sacn.DataPacket, newD sacn.DataPacket) {
+		fmt.Println("data changed on", newD.Universe())
+	})
+	recv.JoinUniverse(1) //join the multicast-group of universe 1
 
 Transmitting
 
