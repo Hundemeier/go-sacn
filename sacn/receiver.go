@@ -1,12 +1,35 @@
 package sacn
 
 import (
-	"bytes"
 	"net"
 	"time"
 
 	"golang.org/x/net/ipv4"
 )
+
+//Set the timout according to the E1.31 protocol
+const timeoutMs = 2500
+
+//ReceiverSocket is used to listen on a network interface for sACN data.
+//The OnChangeCallback is used for changed DMX data. So if a source or priority changed,
+//this callback will not be invoked if not the DMX data has changed.
+//This Receiver checks for out-of-order packets and sorts out packets with too low priority.
+type ReceiverSocket struct {
+	socket             *ipv4.PacketConn
+	stopListener       chan struct{}
+	multicastInterface *net.Interface // the interface that is used for joining multicast groups
+	//OnChangeCallback gets called if the data on one universe has changed. Gets called in own goroutine
+	onChangeCallback func(old DataPacket, new DataPacket)
+	//TimeoutCallback gets called, if a timout on a universe occurs. Gets called in own goroutine
+	timeoutCallback func(universe uint16)
+	lastDatas       map[uint16]lastData
+	timeoutCalled   map[uint16]bool //true, if the timeout was called. To prevent send a timeoutcallback twice
+}
+
+type lastData struct {
+	lastTime   time.Time
+	lastPacket DataPacket
+}
 
 /*
 NewReceiverSocket creates a new unicast Receiversocket that is capable of listening on the given
@@ -26,114 +49,48 @@ func NewReceiverSocket(bind string, ifi *net.Interface) (*ReceiverSocket, error)
 	r.socket = ipv4.NewPacketConn(ServerConn)
 	r.lastDatas = make(map[uint16]lastData)
 	r.timeoutCalled = make(map[uint16]bool)
-	r.stopListener = make(chan struct{})
-	r.startListener()
 	return r, nil
 }
 
-//the listener is responsible for listening on the UDP socket and parsing the incoming data.
-//It dispatches the received packets to the corresponding handlers.
-func (r *ReceiverSocket) startListener() {
-	go func() {
-		buf := make([]byte, 638)
-	Loop:
-		for {
-			select {
-			case <-r.stopListener:
-				break Loop //break if we had a stop signal from the stopChannel
-			default:
-			}
-
-			r.socket.SetDeadline(time.Now().Add(time.Millisecond * timeoutMs))
-			n, _, addr, _ := r.socket.ReadFrom(buf) //n, ControlMessage, addr, err
-			if addr == nil {                        //Check if we had a timeout
-				//that means we did not receive a packet in 2,5s at all
-				r.checkForTimeouts()
-			}
-			p, err := NewDataPacketRaw(buf[0:n])
-			if err != nil {
-				continue //if the packet could not be parsed, just skip it
-			}
-			//send the packet to the responding handler and the other are getting nil
-			r.handle(p)
-		}
-		r.socket.Close() //close the channel, if the listener is finished
-	}()
+//JoinUniverse joins the used udp socket to the multicast-group that is used for the universe.
+//After the multicast-group was joined, any source that transmitt on this universe via multicast
+//should reach this socket.
+//Please read the notice above about multicast use.
+func (r *ReceiverSocket) JoinUniverse(universe uint16) {
+	r.socket.JoinGroup(r.multicastInterface, calcMulticastUDPAddr(universe))
 }
 
-//the handler is responsible for checking all necessary things to decide if callbacks should be invoked
-func (r *ReceiverSocket) handle(p DataPacket) {
-	r.checkForTimeouts()
-	//check if we had a change in priority to the last data we received on the universe
-	last, ok := r.lastDatas[p.Universe()]
-	if ok {
-		//check if the last packet is too long ago, then we do not have to check all other things
-		if time.Since(last.lastTime) > time.Millisecond*timeoutMs {
-			//invoke callback and store the new packet and time
-			if !bytes.Equal(last.lastPacket.Data(), p.Data()) {
-				r.invokeCallback(p)
-			}
-			r.storeLastPacket(p)
-			return // we are finished with this packet
-		}
-		//we have last data for this universe, so check the priority
-		if last.lastPacket.Priority() == p.Priority() {
-			//we have the same priority
-			//check sequence:
-			if checkSequ(last.lastPacket.Sequence(), p.Sequence()) {
-				//sequence is good:; check if the data has changed. If so, then invoke callback
-				if !bytes.Equal(last.lastPacket.Data(), p.Data()) {
-					r.invokeCallback(p)
-				}
-				r.storeLastPacket(p)
-			}
-		} else if last.lastPacket.Priority() < p.Priority() {
-			//priority is higher: invoke callback on data change
-			if !bytes.Equal(last.lastPacket.Data(), p.Data()) {
-				r.invokeCallback(p)
-			}
-			//store the new packet regardless
-			r.storeLastPacket(p)
-		}
-	} else {
-		//store new packet and invoke callback, because we never had data on this one
-		r.invokeCallback(p)
-		r.storeLastPacket(p)
+//LeaveUniverse will leave the mutlicast-group of the given universe.
+//If the the socket was not joined to the multicast-group nothing will happen.
+//Please note, that if you leave a group, a timeout may occurr, because no more data has arrived.
+func (r *ReceiverSocket) LeaveUniverse(universe uint16) {
+	r.socket.LeaveGroup(r.multicastInterface, calcMulticastUDPAddr(universe))
+}
+
+//Close will close the open udp socket and stops the running goroutine.
+//If you want to receive again, use Start(). Do not call close twice!
+func (r *ReceiverSocket) Close() {
+	close(r.stopListener) // stop the running listener on the socket, because we will close the socket
+}
+
+//Start starts a seperate goroutine for handling incoming sACN traffic.
+//If the goroutine is already running, nothing happens. If Close() was called previously,
+//kkep in mind, that it takes up to 2.5 seconds to stop the existing goroutine.
+func (r *ReceiverSocket) Start() {
+	if r.stopListener == nil {
+		r.stopListener = make(chan struct{})
+		r.startListener()
 	}
 }
 
-//invokeCallback calls the callback if it is present.
-func (r *ReceiverSocket) invokeCallback(new DataPacket) {
-	oldData, ok := r.lastDatas[new.Universe()]
-	var old DataPacket
-	if ok {
-		old = oldData.lastPacket
-	} else {
-		old = NewDataPacket()
-	}
-	if r.onChangeCallback != nil {
-		go r.onChangeCallback(old, new)
-	}
+//SetOnChangeCallback sets the given function as callback for the receiver. If no old DataPacket can
+//be provided, it is a packet with universe 0.
+func (r *ReceiverSocket) SetOnChangeCallback(callback func(old DataPacket, new DataPacket)) {
+	r.onChangeCallback = callback
 }
 
-//storeLastPacket stores the packet in the lastDatas store
-func (r *ReceiverSocket) storeLastPacket(p DataPacket) {
-	r.lastDatas[p.Universe()] = lastData{
-		lastPacket: p.copy(),
-		lastTime:   time.Now(),
-	}
-	r.timeoutCalled[p.Universe()] = false
-}
-
-//checkForTimeouts checks all last data if a universe had a timeout. Calls the timeoutCallback.
-func (r *ReceiverSocket) checkForTimeouts() {
-	for univ, last := range r.lastDatas {
-		if time.Since(last.lastTime) > time.Millisecond*timeoutMs {
-			//timeout
-			if r.timeoutCallback != nil && !r.timeoutCalled[univ] {
-				go r.timeoutCallback(univ)
-				r.timeoutCalled[univ] = true
-			}
-		}
-	}
+//SetTimeoutCallback sets the callback for timeouts. The callback gets called everytime a timeout is
+//recognized.
+func (r *ReceiverSocket) SetTimeoutCallback(callback func(universe uint16)) {
+	r.timeoutCallback = callback
 }
