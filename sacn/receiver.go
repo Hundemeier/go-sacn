@@ -34,7 +34,7 @@ type lastData struct {
 /*
 NewReceiverSocket creates a new unicast Receiversocket that is capable of listening on the given
 interface (string is for binding).
-The network interface is used to join multicast groups. On some OSes (eg Windows) you have
+The network interface is used to join multicast groups. On some OS (eg Windows) you have
 to provide an interface for multicast to work. On others "nil" may be enough. If you dont want
 to use multicast for receiving, just provide "nil".
 */

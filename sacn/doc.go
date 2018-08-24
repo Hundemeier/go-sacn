@@ -9,31 +9,8 @@ Receiving
 The simplest way to receive sACN packets is to use `sacn.NewReceiverSocket`.
 
 The receiver checks for out-of-order packets (inspecting the sequence number) and sorts for priority.
-The channel only gets used for changed DMX data, so it behaves like a change listener.
-Note: if two or more sources are transmitting on the same universe with the same priority,
-there will be errors send through the error channel with "sources exceeded" as text.
-No data will be transmitted through the data channel.
-Synchronization must be implemented in your program, but currently there is no way to receive
+Synchronization must be implemented in the callers program, but currently there is no way to receive
 the sACN sync-packets. This feature may come in a future version.
-Please note: This implementation is subjected to change!
-
-Unicast
-
-Example for simple unicast listener:
-
-	recv, err := sacn.NewReceiverSocket("", nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-	recv.SetOnChangeCallback(func(old sacn.DataPacket, newD sacn.DataPacket) {
-		fmt.Println("data changed on", newD.Universe())
-	})
-	recv.SetTimeoutCallback(func(univ uint16) {
-		fmt.Println("timeout on", univ)
-	})
-	select {} //only that our program does not exit. Exit with Ctrl+C
-
-Multicast
 
 This `sacn.ReceiverSocket` can use multicast groups to receive its data. Unicast packets that are received
 are also processed like the normal unicast receiver. Depending on your operating system, you might can
@@ -44,26 +21,6 @@ Note that the network infrastructure has to be multicast ready and that on some 
 packets will increase. Also the packet loss can be higher if multicast is choosen
 (This is often a problem when WLAN is used). This can cause unintentional timeouts, if the sources
 are only transmitting every 2 seconds (like grandMA2 consoles).
-
-Example for multicast use:
-
-	//get the interface we use to listen via multicast
-	//see the net package for more information
-	ifi, err := net.InterfaceByName("WLAN")
-	if err != nil {
-		log.Fatal(err)
-	}
-	recv, err := sacn.NewReceiverSocket("", ifi)
-	//use the interface we searched for as interface for
-	//multicast use
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer recv.Close()
-	recv.SetOnChangeCallback(func(old sacn.DataPacket, newD sacn.DataPacket) {
-		fmt.Println("data changed on", newD.Universe())
-	})
-	recv.JoinUniverse(1) //join the multicast-group of universe 1
 
 Transmitting
 
