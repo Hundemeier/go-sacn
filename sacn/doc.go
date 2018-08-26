@@ -18,13 +18,13 @@ provide `nil` as an interface, sometimes you have to use a dedicated interface, 
 Windows needs an interface and Linux generally not.
 
 Note that the network infrastructure has to be multicast ready and that on some networks the delay of
-packets will increase. Also the packet loss can be higher if multicast is choosen
+packets will increase. Also the packet loss can be higher if multicast is chosen
 (This is often a problem when WLAN is used). This can cause unintentional timeouts, if the sources
 are only transmitting every 2 seconds (like grandMA2 consoles).
 
 Transmitting
 
-To transmitt DMX data, you have to initalize a `Transmitter` object. This handles all the protocol
+To transmitt DMX data, you have to initialize a `Transmitter` object. This handles all the protocol
 specific actions (currently not all). You can activate universes, if you wish to send out data.
 Then you can use a channel for 512-byte arrays to transmitt them over the network.
 

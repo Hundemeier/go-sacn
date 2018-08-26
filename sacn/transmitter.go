@@ -21,7 +21,7 @@ type Transmitter struct {
 
 //NewTransmitter creates a new Transmitter object and returns it. Only use one object for one
 //network interface. bind is a string like "192.168.2.34" or "". It is used for binding the udpconnection.
-//In most cases an emtpy string will be sufficient. The caller is responsible for closing!
+//In most cases an empty string will be sufficient. The caller is responsible for closing!
 //If you want to use multicast, you have to provide a binding string on some operation systems (eg Windows).
 func NewTransmitter(binding string, cid [16]byte, sourceName string) (Transmitter, error) {
 	//create tranmsitter:
@@ -135,10 +135,10 @@ func (t *Transmitter) IsMulticast(universe uint16) bool {
 }
 
 //SetDestinations sets a slice of destinations for the universe that is used for sending out.
-//So multiple destinations are supported. Note: the exisitng slice will be overwritten!
+//So multiple destinations are supported. Note: the existing slice will be overwritten!
 //If you want no unicasting, just set an empty slice. If there is a string that could not be
 //converted to an ip-address, this one is left out and an error slice will be returned,
-//but the indices of the errors are not the same as the string indices on which the errors happended.
+//but the indices of the errors are not the same as the string indices on which the errors happened.
 func (t *Transmitter) SetDestinations(universe uint16, destinations []string) []error {
 	newDest := make([]net.UDPAddr, 0)
 	errs := make([]error, 0)
