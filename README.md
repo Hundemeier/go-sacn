@@ -9,7 +9,7 @@ If you want to see a full DMX package, see the
 There is also some documentation on [godoc.org](https://godoc.org/github.com/Hundemeier/go-sacn/sacn).
 
 ```
-go get guthub.com/Hundemeier/go-sacn/sacn
+go get github.com/Hundemeier/go-sacn/sacn
 ```
 
 ## Receiving
