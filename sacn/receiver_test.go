@@ -1,46 +1,46 @@
-package sacn
+package sacn_test
 
 import (
-	"reflect"
-	"testing"
+	"fmt"
+	"log"
+	"net"
+	"time"
+
+	"github.com/Hundemeier/go-sacn/sacn"
 )
 
-func TestGetAllowedSources(t *testing.T) {
-	m := make(map[[16]byte]source)
-	m[[16]byte{1}] = source{
-		highestPrio: 100,
+func ExampleReceiverSocket_unicast() {
+	recv, err := sacn.NewReceiverSocket("", nil)
+	if err != nil {
+		log.Fatal(err)
 	}
-	m[[16]byte{2}] = source{
-		highestPrio: 100,
-	}
-	m[[16]byte{4}] = source{
-		highestPrio: 50,
-	}
-	m[[16]byte{3}] = source{
-		highestPrio: 70,
-	}
-	out := getAllowedSources(m)
-	shouldBe := make(map[[16]byte]struct{})
-	shouldBe[[16]byte{1}] = struct{}{}
-	shouldBe[[16]byte{2}] = struct{}{}
-	if !reflect.DeepEqual(shouldBe, out) {
-		t.Errorf("Output: %v \nShould have been: %v", out, shouldBe)
-	}
+	recv.SetOnChangeCallback(func(old sacn.DataPacket, newD sacn.DataPacket) {
+		fmt.Println("data changed on", newD.Universe())
+	})
+	recv.SetTimeoutCallback(func(univ uint16) {
+		fmt.Println("timeout on", univ)
+	})
+	select {} //only that our program does not exit. Exit with Ctrl+C
 }
 
-func TestUpdateSourcesMap(t *testing.T) {
-	firstSource := [16]byte{1}
-	m := make(map[[16]byte]source)
-	p := NewDataPacket()
-	p.SetPriority(120)
-	p.SetCID(firstSource)
-	shouldBe := make(map[[16]byte]source)
-	shouldBe[firstSource] = source{
-		highestPrio: 120,
+func ExampleReceiverSocket_multicast() {
+	ifi, err := net.InterfaceByName("eth0") //this name depends on your machine!
+	if err != nil {
+		log.Fatal(err)
 	}
-	updateSourcesMap(m, p)
-	if m[firstSource].highestPrio != shouldBe[firstSource].highestPrio ||
-		m[firstSource].lastTime != m[firstSource].lastTimeHighPrio {
-		t.Errorf("The priorities are not the same or the last times are not the same!\nOut: %v\nShouldbe:%v", m, shouldBe)
+	recv, err := sacn.NewReceiverSocket("", ifi)
+	if err != nil {
+		log.Fatal(err)
 	}
+	recv.SetOnChangeCallback(func(old sacn.DataPacket, newD sacn.DataPacket) {
+		fmt.Println("data changed on", newD.Universe())
+	})
+	recv.SetTimeoutCallback(func(univ uint16) {
+		fmt.Println("timeout on", univ)
+	})
+	recv.JoinUniverse(1)
+	time.Sleep(10 * time.Second) //only join for 10 seconds, just for testing
+	recv.LeaveUniverse(1)
+	fmt.Println("Leaved")
+	select {} //only that our program does not exit. Exit with Ctrl+C
 }

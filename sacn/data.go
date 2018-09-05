@@ -29,7 +29,7 @@ func NewDataPacket() DataPacket {
 	p.replace(18, getAsBytes32(vectorRootE131Data))
 	p.replace(40, getAsBytes32(vectorE131DataPacket))
 	p.data[117] = vectorDmpSetProperty
-	//set inital FAL
+	//set initial FAL
 	p.setFAL(126)
 	//set address and data type
 	p.data[118] = 0xa1
@@ -84,6 +84,16 @@ func (d *DataPacket) replace(startIndex int, replacement []byte) {
 		append(replacement, d.data[len(replacement)+startIndex:]...)...)
 }
 
+//copy returns a copy of the DataPacket
+func (d *DataPacket) copy() DataPacket {
+	copySlice := make([]byte, len(d.data))
+	copy(copySlice, d.data)
+	return DataPacket{
+		data:   copySlice,
+		length: d.length,
+	}
+}
+
 //SetCID sets the CID unique identifier
 func (d *DataPacket) SetCID(cid [16]byte) {
 	d.replace(22, cid[0:16])
@@ -106,7 +116,7 @@ func (d *DataPacket) SetSourceName(s string) {
 
 //SourceName returns the stored source name. Note that the source name max length is 64!
 func (d *DataPacket) SourceName() string {
-	i := 44 //the ending index for the string, becuase it is 0 terminated
+	i := 44 //the ending index for the string, because it is 0 terminated
 	for i < 108 && d.data[i] != 0 {
 		i++
 	}

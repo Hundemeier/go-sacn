@@ -43,3 +43,27 @@ func TestCalcMulticastAddr(t *testing.T) {
 		t.Errorf("Wrong output! Was: %v; Should've been: %v", out, shouldBe)
 	}
 }
+
+func TestCalcMulticastUdpAddr(t *testing.T) {
+	out := calcMulticastUDPAddr(100)
+	if out.Port != 5568 ||
+		!out.IP.IsMulticast() ||
+		out.IP.To4().String() != "239.255.0.100" {
+		t.Errorf("IP should have been 239.255.0.100, was %v", out.IP.To4())
+	}
+}
+
+func TestCheckSequ(t *testing.T) {
+	if !checkSequ(12, 13) {
+		t.Error("Sequence was one higher, should be good!")
+	}
+	if !checkSequ(100, 80) {
+		t.Error("New sequence was 20 behind old one. Should be allowed!")
+	}
+	if checkSequ(100, 81) {
+		t.Error("New sequence number of 81 with old 100 shouldn't be allowed!")
+	}
+	if checkSequ(255, 250) {
+		t.Error("should not be allowed!")
+	}
+}
