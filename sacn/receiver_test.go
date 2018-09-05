@@ -20,6 +20,7 @@ func ExampleReceiverSocket_unicast() {
 	recv.SetTimeoutCallback(func(univ uint16) {
 		fmt.Println("timeout on", univ)
 	})
+	recv.Start()
 	select {} //only that our program does not exit. Exit with Ctrl+C
 }
 
@@ -38,6 +39,7 @@ func ExampleReceiverSocket_multicast() {
 	recv.SetTimeoutCallback(func(univ uint16) {
 		fmt.Println("timeout on", univ)
 	})
+	recv.Start()
 	recv.JoinUniverse(1)
 	time.Sleep(10 * time.Second) //only join for 10 seconds, just for testing
 	recv.LeaveUniverse(1)
