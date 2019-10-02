@@ -41,8 +41,14 @@ Note that any existing destinations will be overwritten. If you want to append a
 can use `transmitter.Destination(<universe>)` which returns a deep copy of the used net.UDPAddr
 objects.
 
-### Example
+### Examples
 
+**GoDoc Examples:**
+
+- [Receiver Unicast ](https://godoc.org/github.com/Hundemeier/go-sacn/sacn#example-ReceiverSocket--Unicast)
+- [Receiver Multicast](https://godoc.org/github.com/Hundemeier/go-sacn/sacn#example-ReceiverSocket--Multicast)
+
+**Transmitter Example:**
 ```go
 package main
 
