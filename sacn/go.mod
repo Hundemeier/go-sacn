@@ -1,4 +1,4 @@
-module github.com/Hundemeier/go-sacn
+module github.com/Hundemeier/go-sacn/sacn
 
 go 1.12
 
