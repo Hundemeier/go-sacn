@@ -9,7 +9,7 @@ import (
 //Transmitter : This struct is for managing the transmitting of sACN data.
 //It handles all channels and overwatches what universes are already used.
 type Transmitter struct {
-	universes map[uint16]chan [512]byte
+	universes map[uint16]chan []byte
 	//master stores the master DataPacket for all univereses. Its the last send out packet
 	master       map[uint16]*DataPacket
 	destinations map[uint16][]net.UDPAddr //holds the info about the destinations unicast or multicast
@@ -26,7 +26,7 @@ type Transmitter struct {
 func NewTransmitter(binding string, cid [16]byte, sourceName string) (Transmitter, error) {
 	//create tranmsitter:
 	tx := Transmitter{
-		universes:    make(map[uint16]chan [512]byte),
+		universes:         make(map[uint16]chan []byte),
 		master:       make(map[uint16]*DataPacket),
 		destinations: make(map[uint16][]net.UDPAddr),
 		multicast:    make(map[uint16]bool),
@@ -52,7 +52,7 @@ func NewTransmitter(binding string, cid [16]byte, sourceName string) (Transmitte
 //Activate starts sending out DMX data on the given universe. It returns a channel that accepts
 //byte slices and transmittes them to the unicast or multicast destination.
 //If you want to deactivate the universe, simply close the channel.
-func (t *Transmitter) Activate(universe uint16) (chan<- [512]byte, error) {
+func (t *Transmitter) Activate(universe uint16) (chan<- []byte, error) {
 	//check if the universe is already activated
 	if t.IsActivated(universe) {
 		return nil, fmt.Errorf("the given universe %v is already activated", universe)
@@ -67,7 +67,7 @@ func (t *Transmitter) Activate(universe uint16) (chan<- [512]byte, error) {
 		return nil, err
 	}
 
-	ch := make(chan [512]byte)
+	ch := make(chan []byte)
 	t.universes[universe] = ch
 	//init master packet
 	masterPacket := NewDataPacket()
