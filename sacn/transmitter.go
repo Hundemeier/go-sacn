@@ -11,12 +11,13 @@ import (
 type Transmitter struct {
 	universes map[uint16]chan []byte
 	//master stores the master DataPacket for all univereses. Its the last send out packet
-	master       map[uint16]*DataPacket
-	destinations map[uint16][]net.UDPAddr //holds the info about the destinations unicast or multicast
-	multicast    map[uint16]bool          //stores if an universe should be send out as multicast
-	bind         string                   //stores the string with the binding information
-	cid          [16]byte                 //the global cid for all packets
-	sourceName   string                   //the global source name for all packets
+	master            map[uint16]*DataPacket
+	destinations      map[uint16][]net.UDPAddr //holds the info about the destinations unicast or multicast
+	multicast         map[uint16]bool          //stores if an universe should be send out as multicast
+	bind              string                   //stores the string with the binding information
+	cid               [16]byte                 //the global cid for all packets
+	sourceName        string                   //the global source name for all packets
+	keepAliveInterval time.Duration
 }
 
 //NewTransmitter creates a new Transmitter object and returns it. Only use one object for one
@@ -27,12 +28,13 @@ func NewTransmitter(binding string, cid [16]byte, sourceName string) (Transmitte
 	//create tranmsitter:
 	tx := Transmitter{
 		universes:         make(map[uint16]chan []byte),
-		master:       make(map[uint16]*DataPacket),
-		destinations: make(map[uint16][]net.UDPAddr),
-		multicast:    make(map[uint16]bool),
-		bind:         "",
-		cid:          cid,
-		sourceName:   sourceName,
+		master:            make(map[uint16]*DataPacket),
+		destinations:      make(map[uint16][]net.UDPAddr),
+		multicast:         make(map[uint16]bool),
+		bind:              "",
+		cid:               cid,
+		sourceName:        sourceName,
+		keepAliveInterval: time.Second * 1,
 	}
 	//create a udp address for testing, if the given bind address is possible
 	addr, err := net.ResolveUDPAddr("udp", binding)
@@ -85,7 +87,7 @@ func (t *Transmitter) Activate(universe uint16) (chan<- []byte, error) {
 				break
 			}
 			t.sendOut(serv, universe)
-			time.Sleep(time.Second * 1)
+			time.Sleep(t.keepAliveInterval)
 		}
 	}()
 
@@ -187,6 +189,10 @@ func (t *Transmitter) sendOut(server *net.UDPConn, universe uint16) {
 	for _, dest := range t.destinations[universe] {
 		server.WriteToUDP(packet.getBytes(), &dest)
 	}
+}
+
+func (t *Transmitter) SetKeepAlive(interval time.Duration) {
+	t.keepAliveInterval = interval
 }
 
 func generateMulticast(universe uint16) *net.UDPAddr {
