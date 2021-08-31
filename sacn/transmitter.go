@@ -18,6 +18,7 @@ type Transmitter struct {
 	cid               [16]byte                 //the global cid for all packets
 	sourceName        string                   //the global source name for all packets
 	keepAliveInterval time.Duration
+	priority          byte
 }
 
 //NewTransmitter creates a new Transmitter object and returns it. Only use one object for one
@@ -77,6 +78,9 @@ func (t *Transmitter) Activate(universe uint16) (chan<- []byte, error) {
 	masterPacket.SetSourceName(t.sourceName)
 	masterPacket.SetUniverse(universe)
 	masterPacket.SetData(make([]byte, 512)) //set 0 data
+	if t.priority > 0x0 {
+		masterPacket.SetPriority(t.priority)
+	}
 	t.master[universe] = &masterPacket
 
 	//make goroutine that sends out every second a "keep alive" packet
@@ -193,6 +197,10 @@ func (t *Transmitter) sendOut(server *net.UDPConn, universe uint16) {
 
 func (t *Transmitter) SetKeepAlive(interval time.Duration) {
 	t.keepAliveInterval = interval
+}
+
+func (t *Transmitter) SetPriority(prio byte) {
+	t.priority = prio
 }
 
 func generateMulticast(universe uint16) *net.UDPAddr {
