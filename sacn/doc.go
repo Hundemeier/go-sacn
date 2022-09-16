@@ -1,10 +1,11 @@
-/*Package sacn is a simple sACN implementation. The standard can be obtained here: http://tsp.esta.org/tsp/documents/docs/E1-31-2016.pdf
+/*
+Package sacn is a simple sACN implementation. The standard can be obtained here: http://tsp.esta.org/tsp/documents/docs/E1-31-2016.pdf
 
 This is by no means a full implementation yet, but may be in the future.
 If you want to see a full DMX package, see the
 http://opendmx.net/index.php/Open_Lighting_Architecture project.
 
-Receiving
+# Receiving
 
 The simplest way to receive sACN packets is to use `sacn.NewReceiverSocket`.
 
@@ -22,11 +23,11 @@ packets will increase. Also the packet loss can be higher if multicast is chosen
 (This is often a problem when WLAN is used). This can cause unintentional timeouts, if the sources
 are only transmitting every 2 seconds (like grandMA2 consoles).
 
-Transmitting
+# Transmitting
 
-To transmitt DMX data, you have to initialize a `Transmitter` object. This handles all the protocol
+To transmit DMX data, you have to initialize a `Transmitter` object. This handles all the protocol
 specific actions (currently not all). You can activate universes, if you wish to send out data.
-Then you can use a channel for 512-byte arrays to transmitt them over the network.
+Then you can use a channel for 512-byte arrays to transmit them over the network.
 
 There are two different types of addressing the receiver: unicast and multicast.
 When using multicast, note that you have to provide a bind address on some operating systems
@@ -77,5 +78,6 @@ Example
 			ch <- [512]byte{byte(rand.Int()), byte(i & 0xFF)}
 			time.Sleep(500 * time.Millisecond)
 		}
-	}*/
+	}
+*/
 package sacn
