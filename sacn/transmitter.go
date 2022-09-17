@@ -195,10 +195,17 @@ func (t *Transmitter) sendOut(server *net.UDPConn, universe uint16) {
 	}
 }
 
+// Allows the user to set a different interval than the internal default 
+// of 1 second when the current data will be re-written to the network 
+// to the outputs. (e.g. a much higher interval for less dynamically 
+// changing lighting and lower overall network traffic.)
 func (t *Transmitter) SetKeepAlive(interval time.Duration) {
 	t.keepAliveInterval = interval
 }
 
+// Allows the caller to set a priority on the sACN packets to be used in
+// situations when a destination receives data from multiple sources and
+// needs to decide which one to ignore.
 func (t *Transmitter) SetPriority(prio byte) {
 	t.priority = prio
 }
