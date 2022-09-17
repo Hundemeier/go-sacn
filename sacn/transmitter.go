@@ -17,8 +17,8 @@ type Transmitter struct {
 	bind              string                   //stores the string with the binding information
 	cid               [16]byte                 //the global cid for all packets
 	sourceName        string                   //the global source name for all packets
-	keepAliveInterval time.Duration
-	priority          byte
+	keepAliveInterval time.Duration            //the minium interval a packet is sent out higher can be used for
+	priority          byte                     //the priority at which our packets are sent out and receivers use to determine which packet to use.
 }
 
 // NewTransmitter creates a new Transmitter object and returns it. Only use one object for one
@@ -195,9 +195,9 @@ func (t *Transmitter) sendOut(server *net.UDPConn, universe uint16) {
 	}
 }
 
-// Allows the user to set a different interval than the internal default 
-// of 1 second when the current data will be re-written to the network 
-// to the outputs. (e.g. a much higher interval for less dynamically 
+// Allows the user to set a different interval than the internal default
+// of 1 second when the current data will be re-written to the network
+// to the outputs. (e.g. a much higher interval for less dynamically
 // changing lighting and lower overall network traffic.)
 func (t *Transmitter) SetKeepAlive(interval time.Duration) {
 	t.keepAliveInterval = interval
