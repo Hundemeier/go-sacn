@@ -24,9 +24,9 @@ are only transmitting every 2 seconds (like grandMA2 consoles).
 
 Transmitting
 
-To transmitt DMX data, you have to initialize a `Transmitter` object. This handles all the protocol
+To transmit DMX data, you have to initialize a `Transmitter` object. This handles all the protocol
 specific actions (currently not all). You can activate universes, if you wish to send out data.
-Then you can use a channel for 512-byte arrays to transmitt them over the network.
+Then you can use a channel for 512-byte arrays to transmit them over the network.
 
 There are two different types of addressing the receiver: unicast and multicast.
 When using multicast, note that you have to provide a bind address on some operating systems

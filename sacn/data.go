@@ -78,7 +78,7 @@ func (d *DataPacket) setFAL(length uint16) {
 	d.length = length
 }
 
-//replace everything starting from the startindex in the datapacket with the given replacement
+//replace everything starting from the start index in the data packet with the given replacement
 func (d *DataPacket) replace(startIndex int, replacement []byte) {
 	d.data = append(d.data[:startIndex],
 		append(replacement, d.data[len(replacement)+startIndex:]...)...)
@@ -132,7 +132,7 @@ func (d *DataPacket) SetPriority(prio byte) error {
 	return nil
 }
 
-//Priority returns the byte value of the priorty field of the packet. Value range: [0-200]
+//Priority returns the byte value of the priority field of the packet. Value range: [0-200]
 func (d *DataPacket) Priority() byte {
 	return d.data[108]
 }
@@ -172,7 +172,7 @@ func (d *DataPacket) PreviewData() bool {
 	return d.getOptionsBit(7)
 }
 
-//SetStreamTerminated sets the stream_termiantion falg on or off
+//SetStreamTerminated sets the stream_termination flag on or off
 func (d *DataPacket) SetStreamTerminated(value bool) {
 	d.setOptionsBit(6, value)
 }
