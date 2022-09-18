@@ -132,7 +132,7 @@ func (d *DataPacket) SetPriority(prio byte) error {
 	return nil
 }
 
-// Priority returns the byte value of the priority field of the packet. Value range: [0-200]
+// Priority returns the byte value of the prioriity field of the packet. Value range: [0-200]
 func (d *DataPacket) Priority() byte {
 	return d.data[108]
 }

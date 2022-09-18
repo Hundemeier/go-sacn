@@ -20,7 +20,7 @@ type ReceiverSocket struct {
 	multicastInterface *net.Interface // the interface that is used for joining multicast groups
 	//OnChangeCallback gets called if the data on one universe has changed. Gets called in own goroutine
 	onChangeCallback func(old DataPacket, new DataPacket)
-	//TimeoutCallback gets called, if a timout on a universe occurs. Gets called in own goroutine
+	//TimeoutCallback gets called, if a timeout on a universe occurs. Gets called in own goroutine
 	timeoutCallback func(universe uint16)
 	lastDatas       map[uint16]lastData
 	timeoutCalled   map[uint16]bool //true, if the timeout was called. To prevent send a timeout callback twice
