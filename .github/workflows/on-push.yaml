@@ -1,0 +1,22 @@
+on: [push, pull_request]
+name: Linting and Tests
+jobs:
+  main:
+    strategy:
+      matrix:
+        go-version: [1.12, 1.13, 1.14, 1.15, 1.16, 1.17, 1.18, 1.19]
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/setup-go@v3
+      with:
+        go-version: ${{ matrix.go-version }}
+    - uses: actions/checkout@v3
+    - name: golangci-lint
+      uses: golangci/golangci-lint-action@v3
+      with:
+        version: latest
+        working-directory: ./sacn
+    - name: run tests
+      working-directory: ./sacn
+      run: go test -v ./...
