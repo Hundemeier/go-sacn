@@ -2,6 +2,7 @@ package sacn
 
 import (
 	"bytes"
+	"fmt"
 	"time"
 )
 
@@ -18,7 +19,10 @@ func (r *ReceiverSocket) startListener() {
 			default:
 			}
 
-			r.socket.SetDeadline(time.Now().Add(time.Millisecond * timeoutMs))
+			err := r.socket.SetDeadline(time.Now().Add(time.Millisecond * timeoutMs))
+			if err != nil {
+				panic(fmt.Sprintf("could not set deadline on socket: %v", err))
+			}
 			n, _, addr, _ := r.socket.ReadFrom(buf) //n, ControlMessage, addr, err
 			if addr == nil {                        //Check if we had a timeout
 				//that means we did not receive a packet in 2,5s at all

@@ -69,12 +69,15 @@ func TestSourceName(t *testing.T) {
 func TestSetPriority(t *testing.T) {
 	p := NewDataPacket()
 	prio := byte(150)
-	p.SetPriority(prio)
+	err := p.SetPriority(prio)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
 	o := p.data[108]
 	if o != prio {
 		t.Errorf("Wrong output! Was: %v; Should've been different!: %v", o, prio)
 	}
-	err := p.SetPriority(210)
+	err = p.SetPriority(210)
 	if err == nil {
 		t.Error("Err was nil! Should have been an error!")
 	}
@@ -83,7 +86,10 @@ func TestSetPriority(t *testing.T) {
 func TestPriority(t *testing.T) {
 	p := NewDataPacket()
 	prio := byte(150)
-	p.SetPriority(prio)
+	err := p.SetPriority(prio)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
 	o := p.Priority()
 	if o != prio {
 		t.Errorf("Wrong output! Was: %v; Should've been different!: %v", o, prio)

@@ -36,7 +36,10 @@ func NewDataPacket() DataPacket {
 	//set address increment
 	p.data[122] = 0x1
 	//Default priority:
-	p.SetPriority(100)
+	err := p.SetPriority(100)
+	if err != nil {
+		panic(fmt.Sprintf("could not set default value for priority: %v", err))
+	}
 
 	return p
 }

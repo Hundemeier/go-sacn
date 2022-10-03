@@ -79,7 +79,8 @@ func (t *Transmitter) Activate(universe uint16) (chan<- []byte, error) {
 	masterPacket.SetUniverse(universe)
 	masterPacket.SetData(make([]byte, 512)) //set 0 data
 	if t.priority > 0x0 {
-		masterPacket.SetPriority(t.priority)
+		err = masterPacket.SetPriority(t.priority)
+		return nil, err
 	}
 	t.master[universe] = &masterPacket
 
@@ -187,11 +188,17 @@ func (t *Transmitter) sendOut(server *net.UDPConn, universe uint16) {
 	packet.SequenceIncr()
 	//check if we have to transmit via multicast
 	if t.multicast[universe] {
-		server.WriteToUDP(packet.getBytes(), generateMulticast(universe))
+		_, err := server.WriteToUDP(packet.getBytes(), generateMulticast(universe))
+		if err != nil {
+			panic(fmt.Sprintf("could not write multicast UDP to UDPConn: %v", err))
+		}
 	}
 	//for every destination, send out
 	for _, dest := range t.destinations[universe] {
-		server.WriteToUDP(packet.getBytes(), &dest)
+		_, err := server.WriteToUDP(packet.getBytes(), &dest)
+		if err != nil {
+			panic(fmt.Sprintf("could not write unicast UDP to UDPConn: %v", err))
+		}
 	}
 }
 

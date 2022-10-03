@@ -1,6 +1,7 @@
 package sacn
 
 import (
+	"fmt"
 	"net"
 	"time"
 
@@ -58,14 +59,20 @@ func NewReceiverSocket(bind string, ifi *net.Interface) (*ReceiverSocket, error)
 // should reach this socket.
 // Please read the notice above about multicast use.
 func (r *ReceiverSocket) JoinUniverse(universe uint16) {
-	r.socket.JoinGroup(r.multicastInterface, calcMulticastUDPAddr(universe))
+	err := r.socket.JoinGroup(r.multicastInterface, calcMulticastUDPAddr(universe))
+	if err != nil {
+		panic(fmt.Sprintf("could not join multicast group for universe %v: %v", universe, err))
+	}
 }
 
 // LeaveUniverse will leave the multicast-group of the given universe.
 // If the the socket was not joined to the multicast-group nothing will happen.
 // Please note, that if you leave a group, a timeout may occur, because no more data has arrived.
 func (r *ReceiverSocket) LeaveUniverse(universe uint16) {
-	r.socket.LeaveGroup(r.multicastInterface, calcMulticastUDPAddr(universe))
+	err := r.socket.LeaveGroup(r.multicastInterface, calcMulticastUDPAddr(universe))
+	if err != nil {
+		panic(fmt.Sprintf("could not leave multicast group for universe %v: %v", universe, err))
+	}
 }
 
 // Close will close the open udp socket and stops the running goroutine.
