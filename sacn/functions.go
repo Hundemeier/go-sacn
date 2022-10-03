@@ -6,7 +6,7 @@ import (
 	"net"
 )
 
-//CalculateFal : Calculates the two bytes of a FlagsAndLength field of a sACN packet
+// CalculateFal : Calculates the two bytes of a FlagsAndLength field of a sACN packet
 func calculateFal(length uint16) [2]byte {
 	return [2]byte{
 		byte(0x70) + byte((length>>8)&0x0F),
